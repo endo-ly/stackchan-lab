@@ -1,0 +1,21 @@
+server:
+  host: "127.0.0.1"
+  port: 8787
+
+serial:
+  mode: "real"
+  port: "/dev/stackchan"
+  baud_rate: 115200
+  timeout_ms: 1000
+  reconnect:
+    enabled: true
+    interval_ms: 2000
+
+safety:
+  min_x: -300
+  max_x: 300
+  min_y: 0
+  max_y: 450
+
+logging:
+  level: "info"

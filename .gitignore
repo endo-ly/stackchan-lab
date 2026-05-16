@@ -2,3 +2,8 @@
 .vscode/
 compile_commands.json
 
+docs/plan/
+
+node_modules/
+dist/
+bridge/config.yaml
