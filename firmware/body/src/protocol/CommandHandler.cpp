@@ -40,7 +40,7 @@ String CommandHandler::handle(const ParsedCommand& command)
                 + " board=" + kBoardName;
         case CommandType::Help:
             return hasNoArgs(command)
-                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down"
+                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV"
                 : tooManyArguments(command);
         case CommandType::Status:
             return handleStatus(command);
@@ -54,11 +54,128 @@ String CommandHandler::handle(const ParsedCommand& command)
             return handleMove(command);
         case CommandType::Reset:
             return handleReset(command);
+        case CommandType::Audio:
+            return handleAudio(command);
         case CommandType::Unknown:
             return String("ERR ") + toString(ProtocolError::UnknownCommand) + " command=" + command.name;
     }
 
     return String("ERR ") + toString(ProtocolError::InternalError);
+}
+
+uint8_t* CommandHandler::wavReceiveBuffer()
+{
+    return body_.wavReceiveBuffer();
+}
+
+String CommandHandler::completeWavTransfer(size_t size)
+{
+    String error;
+    if (!body_.playPreparedWav(size, error)) {
+        return String("ERR ") + error;
+    }
+    String response = "OK AUDIO PLAY size=";
+    response += size;
+    return response;
+}
+
+String CommandHandler::handleAudio(const ParsedCommand& command)
+{
+    if (command.argCount == 0) {
+        return missingArgument("audio_command");
+    }
+
+    const String action = normalized(command.args[0]);
+    if (action == "status") {
+        return handleAudioStatus(command);
+    }
+    if (action == "volume") {
+        return handleAudioVolume(command);
+    }
+    if (action == "stop") {
+        return handleAudioStop(command);
+    }
+    if (action == "wav") {
+        return handleAudioWav(command);
+    }
+
+    return invalidArgument("audio_command", command.args[0]);
+}
+
+String CommandHandler::handleAudioStatus(const ParsedCommand& command) const
+{
+    if (command.argCount > 1) {
+        return tooManyArguments(command);
+    }
+
+    const AudioState& audio = body_.getAudioState();
+    String response = "OK AUDIO STATUS state=";
+    response += toString(audio.state());
+    response += " playing=";
+    response += audio.isPlaying() ? "true" : "false";
+    response += " volume=";
+    response += audio.volume();
+    response += " size=";
+    response += audio.currentSize();
+    response += " received=";
+    response += audio.receivedSize();
+    return response;
+}
+
+String CommandHandler::handleAudioVolume(const ParsedCommand& command)
+{
+    if (command.argCount < 2) {
+        return missingArgument("volume");
+    }
+    if (command.argCount > 2) {
+        return tooManyArguments(command);
+    }
+
+    int volume = 0;
+    if (!parseInteger(command.args[1], volume) || !body_.setAudioVolume(volume)) {
+        return invalidArgument("volume", command.args[1]);
+    }
+
+    String response = "OK AUDIO VOLUME ";
+    response += volume;
+    return response;
+}
+
+String CommandHandler::handleAudioStop(const ParsedCommand& command)
+{
+    if (command.argCount > 1) {
+        return tooManyArguments(command);
+    }
+
+    body_.stopAudio();
+    return "OK AUDIO STOP";
+}
+
+String CommandHandler::handleAudioWav(const ParsedCommand& command)
+{
+    if (command.argCount < 2) {
+        return missingArgument("size");
+    }
+    if (command.argCount > 2) {
+        return tooManyArguments(command);
+    }
+
+    size_t size = 0;
+    if (!parseSize(command.args[1], size)) {
+        return invalidArgument("size", command.args[1]);
+    }
+
+    String error;
+    if (!body_.prepareWav(size, error)) {
+        if (error == "AUDIO_TOO_LARGE") {
+            return String("ERR AUDIO_TOO_LARGE max=") + kMaxWavBytes;
+        }
+        return String("ERR ") + error;
+    }
+
+    String response = "READY AUDIO WAV size=";
+    response += size;
+    return response;
 }
 
 String CommandHandler::handleFace(const ParsedCommand& command)
@@ -159,6 +276,7 @@ String CommandHandler::handleReset(const ParsedCommand& command)
     body_.setExpression(Expression::Neutral);
     body_.setMood(Mood::Calm);
     body_.setPose(MotionPose::Neutral);
+    body_.stopAudio();
     return "OK RESET";
 }
 
@@ -295,6 +413,16 @@ bool CommandHandler::parseInteger(const String& value, int& result) const
     }
 
     result = trimmed.toInt();
+    return true;
+}
+
+bool CommandHandler::parseSize(const String& value, size_t& result) const
+{
+    int parsed = 0;
+    if (!parseInteger(value, parsed) || parsed < 0) {
+        return false;
+    }
+    result = static_cast<size_t>(parsed);
     return true;
 }
 

@@ -17,6 +17,8 @@ public:
     void processLine(const String& line);
 
 private:
+    bool maybeReceiveWav(const String& response);
+    bool parseReadyWavSize(const String& response, size_t& size) const;
     void handleChar(char value);
     void writeResponse(const String& response);
     void resetInput();

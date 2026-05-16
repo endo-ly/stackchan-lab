@@ -32,7 +32,56 @@ void SerialProtocol::processLine(const String& line)
     Serial.println(trimmed);
 
     ParsedCommand command = parser_.parse(trimmed);
-    writeResponse(handler_.handle(command));
+    const String response = handler_.handle(command);
+    writeResponse(response);
+    maybeReceiveWav(response);
+}
+
+bool SerialProtocol::maybeReceiveWav(const String& response)
+{
+    size_t size = 0;
+    if (!parseReadyWavSize(response, size)) {
+        return false;
+    }
+
+    uint8_t* buffer = handler_.wavReceiveBuffer();
+    if (buffer == nullptr) {
+        writeResponse("ERR AUDIO_TRANSFER_FAILED");
+        return false;
+    }
+
+    const uint32_t startedAt = millis();
+    const uint32_t timeoutMs = 5000 + static_cast<uint32_t>(size / 10);
+    size_t received = 0;
+    while (received < size) {
+        if (Serial.available() > 0) {
+            received += Serial.readBytes(buffer + received, size - received);
+            continue;
+        }
+        if (millis() - startedAt > timeoutMs) {
+            writeResponse("ERR AUDIO_RECEIVE_TIMEOUT");
+            return false;
+        }
+        delay(1);
+    }
+
+    writeResponse(handler_.completeWavTransfer(size));
+    return true;
+}
+
+bool SerialProtocol::parseReadyWavSize(const String& response, size_t& size) const
+{
+    if (!response.startsWith("READY AUDIO WAV size=")) {
+        return false;
+    }
+
+    const String value = response.substring(String("READY AUDIO WAV size=").length());
+    const int parsed = value.toInt();
+    if (parsed <= 0) {
+        return false;
+    }
+    size = static_cast<size_t>(parsed);
+    return true;
 }
 
 void SerialProtocol::handleChar(char value)

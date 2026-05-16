@@ -4,7 +4,7 @@
 
 namespace stackchan::protocol {
 
-constexpr const char* kFirmwareVersion = "0.4.0";
+constexpr const char* kFirmwareVersion = "0.6.0";
 constexpr const char* kProtocolVersion = "0.1.0";
 constexpr const char* kBoardName = "stackchan-cores3";
 constexpr size_t kMaxCommandLength = 128;
@@ -20,6 +20,7 @@ enum class CommandType {
     Pose,
     Move,
     Reset,
+    Audio,
     Unknown,
 };
 
@@ -34,6 +35,11 @@ enum class ProtocolError {
     MissingArgument,
     TooManyArguments,
     CommandTooLong,
+    AudioTooLarge,
+    AudioBusy,
+    AudioReceiveTimeout,
+    AudioInvalidFormat,
+    AudioTransferFailed,
     InternalError,
 };
 

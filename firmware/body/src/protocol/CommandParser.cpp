@@ -69,6 +69,9 @@ CommandType CommandParser::parseCommandType(const String& commandName) const
     if (commandName == "RESET") {
         return CommandType::Reset;
     }
+    if (commandName == "AUDIO") {
+        return CommandType::Audio;
+    }
 
     return CommandType::Unknown;
 }

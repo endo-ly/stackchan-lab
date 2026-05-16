@@ -9,6 +9,7 @@ namespace {
 constexpr uint32_t kBlinkDurationMs = 140;
 constexpr uint32_t kBlinkMinDelayMs = 3000;
 constexpr uint32_t kBlinkMaxDelayMs = 7000;
+constexpr uint32_t kMouthToggleIntervalMs = 180;
 
 m5avatar::Avatar avatar;
 
@@ -61,6 +62,11 @@ void FaceController::update()
     }
 
     const uint32_t now = millis();
+    if (state_.isSpeaking() && now - lastMouthToggleAt_ >= kMouthToggleIntervalMs) {
+        setMouthOpen(!state_.mouthOpen());
+        lastMouthToggleAt_ = now;
+    }
+
     if (blinkOpenPending_ && now - blinkStartedAt_ >= kBlinkDurationMs) {
         avatar.setEyeOpenRatio(1.0f);
         blinkOpenPending_ = false;
@@ -108,6 +114,10 @@ void FaceController::setMouthOpen(bool open)
 void FaceController::setSpeaking(bool speaking)
 {
     state_.setSpeaking(speaking);
+    lastMouthToggleAt_ = millis();
+    if (!speaking) {
+        setMouthOpen(false);
+    }
 }
 
 void FaceController::blink()

@@ -18,6 +18,7 @@ void BodyController::begin()
 
     display_.begin();
     display_.showBoot();
+    audio_.begin();
     led_.begin();
     motion_.begin(state_);
 
@@ -36,6 +37,13 @@ void BodyController::update()
 {
     M5StackChan.update();
     display_.update();
+    const bool wasAudioPlaying = audio_.isPlaying();
+    audio_.update();
+    if (wasAudioPlaying && !audio_.isPlaying()) {
+        face_.setSpeaking(false);
+        face_.setMouthOpen(false);
+        led_.setMood(state_.mood());
+    }
     face_.update();
     led_.update();
     motion_.update();
@@ -82,6 +90,41 @@ void BodyController::showStatus()
     display_.showStatus(state_);
 }
 
+bool BodyController::prepareWav(size_t size, String& error)
+{
+    return audio_.prepareWav(size, error);
+}
+
+uint8_t* BodyController::wavReceiveBuffer()
+{
+    return audio_.preparedBuffer();
+}
+
+bool BodyController::playPreparedWav(size_t size, String& error)
+{
+    const bool ok = audio_.playWav(audio_.preparedBuffer(), size, error);
+    if (!ok) {
+        return false;
+    }
+
+    face_.setSpeaking(true);
+    led_.setMood(Mood::Speaking);
+    return true;
+}
+
+void BodyController::stopAudio()
+{
+    audio_.stop();
+    face_.setSpeaking(false);
+    face_.setMouthOpen(false);
+    led_.setMood(state_.mood());
+}
+
+bool BodyController::setAudioVolume(int volume)
+{
+    return audio_.setVolume(volume);
+}
+
 const BodyState& BodyController::getState() const
 {
     return state_;
@@ -90,6 +133,11 @@ const BodyState& BodyController::getState() const
 const FaceState& BodyController::getFaceState() const
 {
     return face_.getState();
+}
+
+const AudioState& BodyController::getAudioState() const
+{
+    return audio_.getState();
 }
 
 void BodyController::logState() const

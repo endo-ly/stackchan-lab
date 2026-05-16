@@ -23,6 +23,8 @@ const char* toString(CommandType type)
             return "MOVE";
         case CommandType::Reset:
             return "RESET";
+        case CommandType::Audio:
+            return "AUDIO";
         case CommandType::Unknown:
             return "UNKNOWN";
     }
@@ -43,6 +45,16 @@ const char* toString(ProtocolError error)
             return "TOO_MANY_ARGUMENTS";
         case ProtocolError::CommandTooLong:
             return "COMMAND_TOO_LONG";
+        case ProtocolError::AudioTooLarge:
+            return "AUDIO_TOO_LARGE";
+        case ProtocolError::AudioBusy:
+            return "AUDIO_BUSY";
+        case ProtocolError::AudioReceiveTimeout:
+            return "AUDIO_RECEIVE_TIMEOUT";
+        case ProtocolError::AudioInvalidFormat:
+            return "AUDIO_INVALID_FORMAT";
+        case ProtocolError::AudioTransferFailed:
+            return "AUDIO_TRANSFER_FAILED";
         case ProtocolError::InternalError:
             return "INTERNAL_ERROR";
     }

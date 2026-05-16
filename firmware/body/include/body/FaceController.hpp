@@ -27,6 +27,7 @@ private:
     bool initialized_ = false;
     bool blinkOpenPending_ = false;
     uint32_t blinkStartedAt_ = 0;
+    uint32_t lastMouthToggleAt_ = 0;
 };
 
 }  // namespace stackchan

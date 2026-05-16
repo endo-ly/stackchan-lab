@@ -13,8 +13,16 @@ public:
     explicit CommandHandler(BodyController& body);
 
     String handle(const ParsedCommand& command);
+    uint8_t* wavReceiveBuffer();
+    String completeWavTransfer(size_t size);
 
 private:
+    String handleAudio(const ParsedCommand& command);
+    String handleAudioStatus(const ParsedCommand& command) const;
+    String handleAudioVolume(const ParsedCommand& command);
+    String handleAudioStop(const ParsedCommand& command);
+    String handleAudioWav(const ParsedCommand& command);
+
     String handleFace(const ParsedCommand& command);
     String handleLed(const ParsedCommand& command);
     String handlePose(const ParsedCommand& command);
@@ -25,6 +33,7 @@ private:
     bool parseExpression(const String& value, Expression& expression) const;
     bool parseMood(const String& value, Mood& mood) const;
     bool parsePose(const String& value, MotionPose& pose) const;
+    bool parseSize(const String& value, size_t& result) const;
     bool parseInteger(const String& value, int& result) const;
     bool hasNoArgs(const ParsedCommand& command) const;
 
