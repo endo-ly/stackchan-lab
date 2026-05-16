@@ -21,16 +21,12 @@ public:
     const BodyState& getState() const;
 
 private:
-    void runDemoOnce();
     void logState() const;
 
     BodyState state_;
     DisplayController display_;
     LedController led_;
     MotionController motion_;
-    bool demoDone_ = false;
-    uint32_t readyAt_ = 0;
 };
 
 }  // namespace stackchan
-

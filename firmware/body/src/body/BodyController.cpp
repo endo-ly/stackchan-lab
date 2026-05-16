@@ -4,11 +4,6 @@
 #include <M5StackChan.h>
 
 namespace stackchan {
-namespace {
-
-constexpr uint32_t kDemoDelayMs = 2500;
-
-}  // namespace
 
 void BodyController::begin()
 {
@@ -29,9 +24,8 @@ void BodyController::begin()
     led_.setMood(Mood::Calm);
     state_.setMood(Mood::Calm);
 
-    state_.setMode(BodyMode::Idle);
+    state_.setMode(BodyMode::Ready);
     display_.showReady();
-    readyAt_ = millis();
 
     logState();
     Serial.println("[BOOT] Ready");
@@ -43,7 +37,6 @@ void BodyController::update()
     display_.update();
     led_.update();
     motion_.update();
-    runDemoOnce();
 }
 
 void BodyController::setExpression(Expression expression)
@@ -92,23 +85,6 @@ const BodyState& BodyController::getState() const
     return state_;
 }
 
-void BodyController::runDemoOnce()
-{
-    if (demoDone_ || readyAt_ == 0) {
-        return;
-    }
-
-    if (millis() - readyAt_ < kDemoDelayMs) {
-        return;
-    }
-
-    Serial.println("[BODY] run simple demo");
-    setExpression(Expression::Thinking);
-    setMood(Mood::Active);
-    setPose(MotionPose::Neutral);
-    demoDone_ = true;
-}
-
 void BodyController::logState() const
 {
     Serial.print("[BODY] mode=");
@@ -122,4 +98,3 @@ void BodyController::logState() const
 }
 
 }  // namespace stackchan
-

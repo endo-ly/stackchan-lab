@@ -2,8 +2,9 @@
 
 公式StackChan向けのPlatformIOファームウェア。
 
-Phase 2では、Phase 1の最小ファームウェアをController構造へ分割し、
-表示、LED、サーボ、状態管理をファームウェア内部で扱いやすくする。
+Phase 3では、Phase 2で整理したController構造の上にUSB Serialの
+テキストプロトコルを追加し、PCからStackChanを外部制御できる
+状態にする。
 
 ## Requirements
 
@@ -25,6 +26,11 @@ firmware/body/
     DisplayController.hpp
     LedController.hpp
     MotionController.hpp
+  include/protocol/
+    CommandHandler.hpp
+    CommandParser.hpp
+    ProtocolTypes.hpp
+    SerialProtocol.hpp
   src/
     main.cpp
     body/
@@ -34,11 +40,16 @@ firmware/body/
       DisplayController.cpp
       LedController.cpp
       MotionController.cpp
+    protocol/
+      CommandHandler.cpp
+      CommandParser.cpp
+      ProtocolTypes.cpp
+      SerialProtocol.cpp
 ```
 
-## Phase 2 Scope
+## Phase 3 Scope
 
-Phase 2では、Phase 1の最小ファームウェアをController構造へ分割する。
+Phase 3 adds a USB Serial text protocol for external control.
 
 Implemented:
 
@@ -49,17 +60,31 @@ Implemented:
 - BodyState
 - Safe servo range clamp
 - Boot sequence logs
-- Simple internal demo
+- SerialProtocol
+- CommandParser
+- CommandHandler
+- PING
+- VERSION
+- HELP
+- STATUS
+- FACE:<expression>
+- LED:<mood>
+- POSE:<pose>
+- MOVE:<x>:<y>
+- RESET
+- Error responses
+- Serial protocol documentation
 
 Not implemented:
 
 - Wi-Fi
 - HTTP API
 - WebSocket
-- Serial command parser
+- Bridge application
 - Audio playback
 - Camera
 - Microphone
+- Input events
 - External application integration
 
 ## Architecture
@@ -73,13 +98,28 @@ BodyController
   |-- DisplayController
   |-- LedController
   `-- MotionController
+
+main.cpp
+  |
+  v
+SerialProtocol
+  |-- CommandParser
+  `-- CommandHandler
+        |
+        v
+      BodyController
 ```
 
-`main.cpp` は詳細な身体制御を持たず、`BodyController.begin()` と
-`BodyController.update()` を呼ぶだけに近い形にしている。
+`main.cpp` は詳細な身体制御やコマンド解析を持たず、`BodyController` と
+`SerialProtocol` の `begin()` / `update()` を呼ぶだけに近い形にしている。
 
 `MotionController` はサーボ値を安全範囲へ clamp する。範囲外の値が
 指定された場合は、適用値を安全範囲内に丸めてシリアルログへ警告を出す。
+
+`SerialProtocol` は1行単位でコマンドを受け取り、レスポンスを `OK` / `ERR`
+で返す。デバッグログは `[` で始まるため、後続のBridge実装では区別しやすい。
+
+プロトコル仕様は [../../docs/protocol/serial-v0.md](../../docs/protocol/serial-v0.md) を参照。
 
 ## Environment Notes
 
@@ -121,13 +161,43 @@ pio device monitor -p /dev/stackchan -b 115200
 ## Expected Boot Log
 
 ```text
-[BOOT] StackChan Body Firmware Phase 2
+[BOOT] StackChan Body Firmware Phase 3
 [BOOT] Initializing body controller
 [DISPLAY] begin
 [LED] begin
 [MOTION] begin
 [MOTION] reset to neutral
-[BODY] mode=Idle expression=Neutral mood=Calm pose=Neutral
+[BODY] mode=Ready expression=Neutral mood=Calm pose=Neutral
 [BOOT] Ready
+[PROTO] Serial protocol ready
 ```
 
+## Serial Commands
+
+シリアルモニタで以下を1行ずつ入力する。
+
+```text
+PING
+VERSION
+STATUS
+FACE:thinking
+LED:calm
+POSE:neutral
+MOVE:0:0
+RESET
+HELP
+```
+
+期待されるレスポンス例:
+
+```text
+OK PONG
+OK VERSION firmware=0.3.0 protocol=0.1.0 board=stackchan-cores3
+OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0
+OK FACE thinking
+OK LED calm
+OK POSE neutral
+OK MOVE x=0 y=0
+OK RESET
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET
+```
