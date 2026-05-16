@@ -25,12 +25,14 @@ const char* toString(Expression expression)
             return "Neutral";
         case Expression::Happy:
             return "Happy";
-        case Expression::Thinking:
-            return "Thinking";
+        case Expression::Sad:
+            return "Sad";
+        case Expression::Angry:
+            return "Angry";
         case Expression::Sleepy:
             return "Sleepy";
-        case Expression::Alert:
-            return "Alert";
+        case Expression::Doubt:
+            return "Doubt";
     }
 
     return "Unknown";
@@ -73,4 +75,3 @@ const char* toString(MotionPose pose)
 }
 
 }  // namespace stackchan
-

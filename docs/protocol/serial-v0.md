@@ -29,9 +29,9 @@ COMMAND:arg1:arg2
 Command names are case-insensitive.
 
 ```text
-FACE:thinking
-face:thinking
-Face:thinking
+FACE:happy
+face:happy
+Face:happy
 ```
 
 Responses are one line and start with `OK`, `ERR`, or `WARN`.
@@ -54,16 +54,16 @@ Returns firmware, protocol, and board versions.
 
 ```text
 VERSION
-OK VERSION firmware=0.3.0 protocol=0.1.0 board=stackchan-cores3
+OK VERSION firmware=0.4.0 protocol=0.1.0 board=stackchan-cores3
 ```
 
 ### HELP
 
-Returns the supported command list.
+Returns the supported command list and supported FACE/LED/POSE values.
 
 ```text
 HELP
-OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down
 ```
 
 ### STATUS
@@ -72,7 +72,7 @@ Returns the current body state.
 
 ```text
 STATUS
-OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0
+OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0 gazeX=0 gazeY=0 speaking=false blinking=false
 ```
 
 Fields:
@@ -83,29 +83,39 @@ Fields:
 - `pose`
 - `x`
 - `y`
+- `gazeX`
+- `gazeY`
+- `speaking`
+- `blinking`
 
 ### FACE
 
-Changes the displayed expression.
+Changes the face expression. `FACE` is limited to the face itself; combined body states such as thinking or alert belong to a future `PRESET` command.
 
 ```text
-FACE:thinking
-OK FACE thinking
+FACE:happy
+OK FACE happy
 ```
 
 Supported values:
 
 - `neutral`
 - `happy`
-- `thinking`
+- `sad`
+- `angry`
 - `sleepy`
+- `doubt`
+
+Not supported by `FACE`:
+
+- `thinking`
 - `alert`
 
 Errors:
 
 ```text
 ERR MISSING_ARGUMENT expression
-ERR INVALID_ARGUMENT expression=angry
+ERR INVALID_ARGUMENT expression=thinking
 ERR TOO_MANY_ARGUMENTS command=FACE
 ```
 
@@ -206,7 +216,7 @@ Successful responses:
 
 ```text
 OK PONG
-OK FACE thinking
+OK FACE happy
 OK LED calm
 OK POSE neutral
 OK MOVE x=0 y=0
@@ -217,13 +227,13 @@ Error responses:
 ```text
 ERR UNKNOWN_COMMAND command=FOO
 ERR MISSING_ARGUMENT expression
-ERR INVALID_ARGUMENT expression=angry
+ERR INVALID_ARGUMENT expression=thinking
 ERR TOO_MANY_ARGUMENTS command=MOVE
 ERR COMMAND_TOO_LONG max=128
 ERR INTERNAL_ERROR
 ```
 
-Warning responses are reserved for later use. Phase 3 primarily reports clamped movement as `clamped=true` in the final `OK MOVE` response.
+Warning responses are reserved for later use. Servo clamping is reported as `clamped=true` in the final `OK MOVE` response.
 
 ## Error Codes
 
@@ -240,6 +250,8 @@ Warning responses are reserved for later use. Phase 3 primarily reports clamped 
 PING
 VERSION
 STATUS
+FACE:happy
+FACE:doubt
 FACE:thinking
 LED:calm
 POSE:neutral

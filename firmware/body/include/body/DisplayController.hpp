@@ -11,7 +11,6 @@ public:
     void showBoot();
     void showReady();
     void showStatus(const BodyState& state);
-    void showExpression(Expression expression);
     void showError(const char* message);
     void update();
 
@@ -21,4 +20,3 @@ private:
 };
 
 }  // namespace stackchan
-

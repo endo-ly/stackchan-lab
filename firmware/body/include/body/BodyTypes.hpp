@@ -12,9 +12,10 @@ enum class BodyMode {
 enum class Expression {
     Neutral,
     Happy,
-    Thinking,
+    Sad,
+    Angry,
     Sleepy,
-    Alert,
+    Doubt,
 };
 
 enum class Mood {
@@ -39,4 +40,3 @@ const char* toString(Mood mood);
 const char* toString(MotionPose pose);
 
 }  // namespace stackchan
-

@@ -2,6 +2,7 @@
 
 #include "body/BodyState.hpp"
 #include "body/DisplayController.hpp"
+#include "body/FaceController.hpp"
 #include "body/LedController.hpp"
 #include "body/MotionController.hpp"
 
@@ -19,12 +20,14 @@ public:
     void showStatus();
 
     const BodyState& getState() const;
+    const FaceState& getFaceState() const;
 
 private:
     void logState() const;
 
     BodyState state_;
     DisplayController display_;
+    FaceController face_;
     LedController led_;
     MotionController motion_;
 };

@@ -4,7 +4,7 @@
 
 namespace stackchan::protocol {
 
-constexpr const char* kFirmwareVersion = "0.3.0";
+constexpr const char* kFirmwareVersion = "0.4.0";
 constexpr const char* kProtocolVersion = "0.1.0";
 constexpr const char* kBoardName = "stackchan-cores3";
 constexpr size_t kMaxCommandLength = 128;

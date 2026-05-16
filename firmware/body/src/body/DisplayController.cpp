@@ -16,7 +16,7 @@ void DisplayController::showBoot()
     clear();
     drawCenteredLine("StackChan", 72, 3, TFT_WHITE);
     drawCenteredLine("Body Firmware", 116, 2, TFT_CYAN);
-    drawCenteredLine("Phase 2", 154, 2, TFT_GREENYELLOW);
+    drawCenteredLine("Phase 4", 154, 2, TFT_GREENYELLOW);
 }
 
 void DisplayController::showReady()
@@ -38,16 +38,6 @@ void DisplayController::showStatus(const BodyState& state)
     drawCenteredLine(toString(state.expression()), 124, 2, TFT_CYAN);
     drawCenteredLine(toString(state.mood()), 160, 2, TFT_CYAN);
     drawCenteredLine(toString(state.pose()), 196, 2, TFT_WHITE);
-}
-
-void DisplayController::showExpression(Expression expression)
-{
-    Serial.print("[DISPLAY] show expression=");
-    Serial.println(toString(expression));
-
-    clear();
-    drawCenteredLine("Expression:", 88, 2, TFT_WHITE);
-    drawCenteredLine(toString(expression), 138, 3, TFT_CYAN);
 }
 
 void DisplayController::showError(const char* message)
@@ -80,4 +70,3 @@ void DisplayController::drawCenteredLine(const char* text, int y, int textSize, 
 }
 
 }  // namespace stackchan
-

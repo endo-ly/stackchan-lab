@@ -2,9 +2,8 @@
 
 公式StackChan向けのPlatformIOファームウェア。
 
-Phase 3では、Phase 2で整理したController構造の上にUSB Serialの
-テキストプロトコルを追加し、PCからStackChanを外部制御できる
-状態にする。
+Phase 4では、USB Serialの `FACE` 語彙を顔そのものの表情に整理し、
+画面に実際の顔を描画するFace & Expression Systemを追加する。
 
 ## Requirements
 
@@ -24,6 +23,8 @@ firmware/body/
     BodyState.hpp
     BodyTypes.hpp
     DisplayController.hpp
+    FaceController.hpp
+    FaceState.hpp
     LedController.hpp
     MotionController.hpp
   include/protocol/
@@ -38,6 +39,8 @@ firmware/body/
       BodyState.cpp
       BodyTypes.cpp
       DisplayController.cpp
+      FaceController.cpp
+      FaceState.cpp
       LedController.cpp
       MotionController.cpp
     protocol/
@@ -47,14 +50,16 @@ firmware/body/
       SerialProtocol.cpp
 ```
 
-## Phase 3 Scope
+## Phase 4 Scope
 
-Phase 3 adds a USB Serial text protocol for external control.
+Phase 4 adds Face Protocol Cleanup and the Face & Expression System.
 
 Implemented:
 
 - BodyController
 - DisplayController
+- FaceController
+- FaceState
 - LedController
 - MotionController
 - BodyState
@@ -72,6 +77,23 @@ Implemented:
 - POSE:<pose>
 - MOVE:<x>:<y>
 - RESET
+- FACE expression cleanup
+- Formal FACE expressions:
+  - neutral
+  - happy
+  - sad
+  - angry
+  - sleepy
+  - doubt
+- Removed from FACE:
+  - thinking
+  - alert
+- Face rendering with M5Stack-Avatar
+- Expression rendering
+- Automatic blinking
+- Gaze state
+- Mouth open state
+- Speaking state placeholder
 - Error responses
 - Serial protocol documentation
 
@@ -86,6 +108,10 @@ Not implemented:
 - Microphone
 - Input events
 - External application integration
+- PRESET
+- TTS
+- STT
+- WAV transfer
 
 ## Architecture
 
@@ -96,6 +122,7 @@ main.cpp
 BodyController
   |-- BodyState
   |-- DisplayController
+  |-- FaceController
   |-- LedController
   `-- MotionController
 
@@ -112,6 +139,15 @@ SerialProtocol
 
 `main.cpp` は詳細な身体制御やコマンド解析を持たず、`BodyController` と
 `SerialProtocol` の `begin()` / `update()` を呼ぶだけに近い形にしている。
+
+`FaceController` は顔描画ライブラリへの依存を内部に閉じ込める。
+`CommandHandler` や `main.cpp` は、顔の描画詳細を知らずに
+`BodyController.setExpression()` だけを呼ぶ。
+
+`M5Stack-Avatar` は内部で描画タスクを起動する。Phase 4では、
+`avatar.init()` 直後に `setExpression()` を続けて呼ぶと実機で
+FreeRTOS assertが発生したため、起動時はAvatarの初期状態に任せ、
+表情変更は `FACE` コマンド経由で行う。
 
 `MotionController` はサーボ値を安全範囲へ clamp する。範囲外の値が
 指定された場合は、適用値を安全範囲内に丸めてシリアルログへ警告を出す。
@@ -161,9 +197,10 @@ pio device monitor -p /dev/stackchan -b 115200
 ## Expected Boot Log
 
 ```text
-[BOOT] StackChan Body Firmware Phase 3
+[BOOT] StackChan Body Firmware Phase 4
 [BOOT] Initializing body controller
 [DISPLAY] begin
+[FACE] begin
 [LED] begin
 [MOTION] begin
 [MOTION] reset to neutral
@@ -180,7 +217,14 @@ pio device monitor -p /dev/stackchan -b 115200
 PING
 VERSION
 STATUS
+FACE:neutral
+FACE:happy
+FACE:sad
+FACE:angry
+FACE:sleepy
+FACE:doubt
 FACE:thinking
+FACE:alert
 LED:calm
 POSE:neutral
 MOVE:0:0
@@ -192,12 +236,27 @@ HELP
 
 ```text
 OK PONG
-OK VERSION firmware=0.3.0 protocol=0.1.0 board=stackchan-cores3
-OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0
-OK FACE thinking
+OK VERSION firmware=0.4.0 protocol=0.1.0 board=stackchan-cores3
+OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0 gazeX=0 gazeY=0 speaking=false blinking=false
+OK FACE neutral
+OK FACE happy
+OK FACE sad
+OK FACE angry
+OK FACE sleepy
+OK FACE doubt
+ERR INVALID_ARGUMENT expression=thinking
+ERR INVALID_ARGUMENT expression=alert
 OK LED calm
 OK POSE neutral
 OK MOVE x=0 y=0
 OK RESET
-OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down
 ```
+
+目視で確認すること:
+
+- 起動後に顔が表示される
+- `FACE` コマンドで顔が変わる
+- 自動瞬きが見える
+- `FACE:thinking` と `FACE:alert` が `ERR INVALID_ARGUMENT` になる
+- `STATUS` に `gazeX` / `gazeY` / `speaking` / `blinking` が含まれる

@@ -11,7 +11,7 @@ void setup()
     Serial.begin(115200);
     delay(200);
     Serial.println();
-    Serial.println("[BOOT] StackChan Body Firmware Phase 3");
+    Serial.println("[BOOT] StackChan Body Firmware Phase 4");
 
     body.begin();
     protocol.begin();

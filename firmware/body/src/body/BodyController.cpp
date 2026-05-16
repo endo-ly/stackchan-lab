@@ -17,15 +17,16 @@ void BodyController::begin()
     M5StackChan.begin();
 
     display_.begin();
+    display_.showBoot();
     led_.begin();
     motion_.begin(state_);
 
-    display_.showBoot();
     led_.setMood(Mood::Calm);
     state_.setMood(Mood::Calm);
+    face_.begin();
+    state_.setExpression(Expression::Neutral);
 
     state_.setMode(BodyMode::Ready);
-    display_.showReady();
 
     logState();
     Serial.println("[BOOT] Ready");
@@ -35,6 +36,7 @@ void BodyController::update()
 {
     M5StackChan.update();
     display_.update();
+    face_.update();
     led_.update();
     motion_.update();
 }
@@ -42,7 +44,7 @@ void BodyController::update()
 void BodyController::setExpression(Expression expression)
 {
     state_.setExpression(expression);
-    display_.showExpression(expression);
+    face_.setExpression(expression);
 
     Serial.print("[BODY] expression=");
     Serial.println(toString(expression));
@@ -83,6 +85,11 @@ void BodyController::showStatus()
 const BodyState& BodyController::getState() const
 {
     return state_;
+}
+
+const FaceState& BodyController::getFaceState() const
+{
+    return face_.getState();
 }
 
 void BodyController::logState() const

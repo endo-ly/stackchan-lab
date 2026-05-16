@@ -40,7 +40,7 @@ String CommandHandler::handle(const ParsedCommand& command)
                 + " board=" + kBoardName;
         case CommandType::Help:
             return hasNoArgs(command)
-                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET"
+                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down"
                 : tooManyArguments(command);
         case CommandType::Status:
             return handleStatus(command);
@@ -182,6 +182,15 @@ String CommandHandler::handleStatus(const ParsedCommand& command) const
     response += state.servoX();
     response += " y=";
     response += state.servoY();
+    const FaceState& face = body_.getFaceState();
+    response += " gazeX=";
+    response += face.gazeX();
+    response += " gazeY=";
+    response += face.gazeY();
+    response += " speaking=";
+    response += face.isSpeaking() ? "true" : "false";
+    response += " blinking=";
+    response += face.isBlinking() ? "true" : "false";
     return response;
 }
 
@@ -195,16 +204,20 @@ bool CommandHandler::parseExpression(const String& value, Expression& expression
         expression = Expression::Happy;
         return true;
     }
-    if (value == "thinking") {
-        expression = Expression::Thinking;
+    if (value == "sad") {
+        expression = Expression::Sad;
+        return true;
+    }
+    if (value == "angry") {
+        expression = Expression::Angry;
         return true;
     }
     if (value == "sleepy") {
         expression = Expression::Sleepy;
         return true;
     }
-    if (value == "alert") {
-        expression = Expression::Alert;
+    if (value == "doubt") {
+        expression = Expression::Doubt;
         return true;
     }
     return false;
