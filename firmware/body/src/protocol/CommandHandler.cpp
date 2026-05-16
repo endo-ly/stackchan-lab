@@ -159,7 +159,6 @@ String CommandHandler::handleReset(const ParsedCommand& command)
     body_.setExpression(Expression::Neutral);
     body_.setMood(Mood::Calm);
     body_.setPose(MotionPose::Neutral);
-    body_.showStatus();
     return "OK RESET";
 }
 
