@@ -108,17 +108,7 @@ export class StackChanBridge {
 
   async reset() {
     await this.runDeviceCommand(() => this.protocol.reset());
-    this.state.updateStatus({
-      expression: "Neutral",
-      mood: "Calm",
-      pose: "Neutral",
-      x: 0,
-      y: this.config.safety.maxY,
-      gazeX: 0,
-      gazeY: 0,
-      speaking: false,
-      blinking: false,
-    });
+    await this.getStatus();
     return { reset: true };
   }
 

@@ -6,6 +6,7 @@ import type { StackChanClient } from "./StackChanClient.js";
 export class StackChanSerialClient implements StackChanClient {
   private port?: SerialPort;
   private parser?: ReadlineParser;
+  private commandQueue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly config: BridgeConfig["serial"]) {}
 
@@ -52,6 +53,12 @@ export class StackChanSerialClient implements StackChanClient {
   }
 
   async sendCommand(command: string): Promise<string> {
+    const queued = this.commandQueue.then(() => this.sendCommandNow(command));
+    this.commandQueue = queued.catch(() => undefined);
+    return queued;
+  }
+
+  private async sendCommandNow(command: string): Promise<string> {
     if (!this.isConnected()) {
       await this.tryReconnect();
     }
