@@ -13,14 +13,14 @@ HTTP client
   -> StackChan Body Firmware
 ```
 
-The bridge does not handle conversation state, personality, memory, audio, TTS, STT, or presets. It is only a control bridge between HTTP and the body firmware.
+The bridge does not handle conversation state, personality, memory, TTS, or STT. It is a control bridge between HTTP and the body firmware.
 
 ## Requirements
 
 - Node.js
 - npm
 - USB Serial connection to StackChan
-- StackChan Body Firmware Phase 4 or later
+- StackChan Body Firmware Phase 6 or later
 
 ## Setup
 
@@ -115,10 +115,16 @@ The smoke test checks:
 - `GET /version`
 - `GET /capabilities`
 - `GET /status`
+- `GET /audio/status`
 - `POST /face`
 - `POST /led`
 - `POST /pose`
 - `POST /move`
+- `POST /audio/volume`
+- `GET /presets`
+- `POST /preset`
+- `POST /play-wav`
+- `POST /audio/stop`
 - `POST /reset`
 - invalid `/face` values return HTTP 400
 
@@ -175,7 +181,7 @@ Supported expressions:
 - `sleepy`
 - `doubt`
 
-`thinking`, `alert`, `listening`, and `speaking` are not FACE expressions in Phase 5.
+`thinking`, `alert`, `listening`, and `speaking` are body presets, not FACE expressions.
 
 ### POST /led
 
@@ -233,6 +239,97 @@ curl -X POST http://127.0.0.1:8787/reset \
   -d '{}'
 ```
 
+### GET /audio/status
+
+Current audio playback state.
+
+```bash
+curl http://127.0.0.1:8787/audio/status
+```
+
+### POST /audio/volume
+
+Set speaker volume.
+
+```bash
+curl -X POST http://127.0.0.1:8787/audio/volume \
+  -H "Content-Type: application/json" \
+  -d '{"volume":180}'
+```
+
+### POST /audio/stop
+
+Stop audio playback.
+
+```bash
+curl -X POST http://127.0.0.1:8787/audio/stop
+```
+
+### POST /play-wav
+
+Send a WAV file to StackChan and play it.
+
+Supported WAV shape:
+
+- PCM
+- mono
+- 16-bit
+- 16000Hz or 24000Hz
+- up to 1MB
+
+```bash
+curl -X POST http://127.0.0.1:8787/play-wav \
+  -F "file=@test-assets/sample.wav"
+```
+
+### GET /presets
+
+List body presets.
+
+```bash
+curl http://127.0.0.1:8787/presets
+```
+
+### POST /preset
+
+Apply a body preset. Presets are expanded by the bridge into FACE, LED, and POSE commands.
+
+```bash
+curl -X POST http://127.0.0.1:8787/preset \
+  -H "Content-Type: application/json" \
+  -d '{"name":"thinking"}'
+```
+
+Supported presets:
+
+- `idle`
+- `thinking`
+- `alert`
+- `listening`
+- `speaking`
+- `happy`
+- `sleepy`
+- `error`
+
+## Phase 6 Scope
+
+Implemented:
+
+- `POST /play-wav`
+- `GET /audio/status`
+- `POST /audio/volume`
+- `POST /audio/stop`
+- `GET /presets`
+- `POST /preset`
+- Mock support for audio and presets
+
+Not implemented:
+
+- STT
+- Wake Word
+- TTS generation
+- External application integration
+
 ## Error Shape
 
 Success:
@@ -258,11 +355,8 @@ Failure:
 
 ## Out of Scope
 
-- Audio playback
-- WAV transfer
 - TTS
 - STT
-- PRESET
 - Input events
 - WebSocket
 - Server-Sent Events

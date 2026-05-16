@@ -14,6 +14,14 @@ export class MockStackChanClient implements StackChanClient {
     speaking: false,
     blinking: false,
   };
+  private audio = {
+    state: "Idle",
+    playing: false,
+    volume: 180,
+    size: 0,
+    received: 0,
+  };
+  private pendingWavSize = 0;
 
   async connect(): Promise<void> {
     this.connected = true;
@@ -52,9 +60,30 @@ export class MockStackChanClient implements StackChanClient {
         this.state.x = 0;
         this.state.y = 450;
         return "OK RESET";
+      case "AUDIO":
+        return this.audioCommand(args);
       default:
         return `ERR UNKNOWN_COMMAND command=${name ?? ""}`;
     }
+  }
+
+  async sendBinary(data: Buffer): Promise<string> {
+    if (this.pendingWavSize <= 0 || data.length !== this.pendingWavSize) {
+      return "ERR AUDIO_TRANSFER_FAILED";
+    }
+    this.audio.state = "Playing";
+    this.audio.playing = true;
+    this.audio.size = data.length;
+    this.audio.received = data.length;
+    this.state.speaking = true;
+    this.pendingWavSize = 0;
+    return `OK AUDIO PLAY size=${data.length}`;
+  }
+
+  async sendCommandWithBinary(command: string, data: Buffer): Promise<{ ready: string; final: string }> {
+    const ready = await this.sendCommand(command);
+    const final = ready.startsWith("READY ") ? await this.sendBinary(data) : ready;
+    return { ready, final };
   }
 
   private statusLine(): string {
@@ -104,6 +133,43 @@ export class MockStackChanClient implements StackChanClient {
     this.state.x = x;
     this.state.y = y;
     return `OK MOVE x=${x} y=${y}`;
+  }
+
+  private audioCommand(args: string[]): string {
+    const action = args[0]?.toLowerCase();
+    if (action === "status") {
+      return `OK AUDIO STATUS state=${this.audio.state} playing=${this.audio.playing} volume=${this.audio.volume} size=${this.audio.size} received=${this.audio.received}`;
+    }
+    if (action === "volume") {
+      const volume = Number(args[1]);
+      if (!Number.isInteger(volume) || volume < 0 || volume > 255) {
+        return `ERR INVALID_ARGUMENT volume=${args[1] ?? ""}`;
+      }
+      this.audio.volume = volume;
+      return `OK AUDIO VOLUME ${volume}`;
+    }
+    if (action === "stop") {
+      this.audio.state = "Idle";
+      this.audio.playing = false;
+      this.state.speaking = false;
+      return "OK AUDIO STOP";
+    }
+    if (action === "wav") {
+      const size = Number(args[1]);
+      if (!Number.isInteger(size) || size <= 0) {
+        return `ERR INVALID_ARGUMENT size=${args[1] ?? ""}`;
+      }
+      if (size > 1048576) {
+        return "ERR AUDIO_TOO_LARGE max=1048576";
+      }
+      if (this.audio.playing) {
+        return "ERR AUDIO_BUSY";
+      }
+      this.pendingWavSize = size;
+      this.audio.state = "Receiving";
+      return `READY AUDIO WAV size=${size}`;
+    }
+    return `ERR INVALID_ARGUMENT audio_command=${args[0] ?? ""}`;
   }
 }
 

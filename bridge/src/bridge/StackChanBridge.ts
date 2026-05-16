@@ -1,9 +1,11 @@
 import { BridgeError } from "./BridgeError.js";
 import { BridgeState } from "./BridgeState.js";
+import { bodyPresets } from "./presets.js";
 import { clampMove } from "./safety.js";
+import { validateWav } from "./wav.js";
 import type { BridgeConfig } from "../config/types.js";
 import type { SerialProtocolClient } from "../serial/SerialProtocolClient.js";
-import { commands, expressions, moods, poses, type Expression, type Mood, type Pose } from "../types/body.js";
+import { commands, expressions, moods, poses, presets, type Expression, type Mood, type Pose, type PresetName } from "../types/body.js";
 
 export class StackChanBridge {
   private readonly state = new BridgeState();
@@ -48,7 +50,7 @@ export class StackChanBridge {
 
     return {
       bridge: {
-        version: "0.5.0",
+        version: "0.6.0",
       },
       device: this.state.getVersion(),
     };
@@ -73,6 +75,10 @@ export class StackChanBridge {
       poses,
       commands,
     };
+  }
+
+  getPresets() {
+    return { presets };
   }
 
   async setFace(expression: string) {
@@ -110,6 +116,45 @@ export class StackChanBridge {
     await this.runDeviceCommand(() => this.protocol.reset());
     await this.getStatus();
     return { reset: true };
+  }
+
+  async getAudioStatus() {
+    return await this.runDeviceCommand(() => this.protocol.audioStatus());
+  }
+
+  async setAudioVolume(volume: number) {
+    if (!Number.isInteger(volume) || volume < 0 || volume > 255) {
+      throw new BridgeError("INVALID_ARGUMENT", "volume must be an integer between 0 and 255");
+    }
+    await this.runDeviceCommand(() => this.protocol.setAudioVolume(volume));
+    return { volume };
+  }
+
+  async stopAudio() {
+    await this.runDeviceCommand(() => this.protocol.stopAudio());
+    return { stopped: true };
+  }
+
+  async playWav(data: Buffer) {
+    validateWav(data);
+    await this.runDeviceCommand(() => this.protocol.playWav(data));
+    return { playing: true, size: data.length };
+  }
+
+  async applyPreset(name: string) {
+    assertAllowed(name, presets, "preset");
+    const preset = bodyPresets[name as PresetName];
+    try {
+      await this.setFace(preset.expression);
+      await this.setLed(preset.mood);
+      await this.setPose(preset.pose);
+      return {
+        preset: name,
+        applied: preset,
+      };
+    } catch (error) {
+      throw new BridgeError("PRESET_APPLY_FAILED", `Failed to apply preset: ${name}`, error);
+    }
   }
 
   private async runDeviceCommand<T>(command: () => Promise<T>): Promise<T> {

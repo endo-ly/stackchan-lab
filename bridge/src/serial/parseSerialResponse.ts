@@ -21,6 +21,13 @@ export type SerialResponse =
       fields: Record<string, string>;
       args: string[];
       raw: string;
+    }
+  | {
+      kind: "ready";
+      command: string;
+      args: string[];
+      fields: Record<string, string>;
+      raw: string;
     };
 
 export function parseSerialResponse(line: string): SerialResponse {
@@ -36,6 +43,21 @@ export function parseSerialResponse(line: string): SerialResponse {
     const rest = parts.slice(2);
     return {
       kind: "ok",
+      command,
+      args: rest.filter((part) => !part.includes("=")),
+      fields: parseFields(rest),
+      raw: line,
+    };
+  }
+
+  if (prefix === "READY") {
+    const command = parts[1] ?? "";
+    if (command.length === 0) {
+      throw new BridgeError("PROTOCOL_PARSE_ERROR", `READY response is missing command: ${line}`);
+    }
+    const rest = parts.slice(2);
+    return {
+      kind: "ready",
       command,
       args: rest.filter((part) => !part.includes("=")),
       fields: parseFields(rest),

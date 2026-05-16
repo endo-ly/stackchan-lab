@@ -6,6 +6,13 @@ export type BridgeErrorCode =
   | "STACKCHAN_ERROR"
   | "PROTOCOL_PARSE_ERROR"
   | "CONFIG_ERROR"
+  | "AUDIO_TOO_LARGE"
+  | "AUDIO_INVALID_FORMAT"
+  | "AUDIO_BUSY"
+  | "AUDIO_TRANSFER_FAILED"
+  | "AUDIO_RECEIVE_TIMEOUT"
+  | "UNSUPPORTED_PRESET"
+  | "PRESET_APPLY_FAILED"
   | "INTERNAL_ERROR";
 
 export class BridgeError extends Error {
