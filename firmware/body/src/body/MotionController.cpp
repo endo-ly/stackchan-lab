@@ -5,10 +5,11 @@
 namespace stackchan {
 namespace {
 
-constexpr int kSafeXMin = -15;
-constexpr int kSafeXMax = 15;
-constexpr int kSafeYMin = -10;
-constexpr int kSafeYMax = 10;
+// StackChan-BSP uses deci-degrees: 10 = 1 degree.
+constexpr int kSafeXMin = -450;
+constexpr int kSafeXMax = 450;
+constexpr int kSafeYMin = 0;
+constexpr int kSafeYMax = 450;
 constexpr int kNeutralX = 0;
 constexpr int kNeutralY = 0;
 constexpr int kMoveSpeed = 200;
@@ -48,16 +49,16 @@ void MotionController::setPose(BodyState& state, MotionPose pose)
             moveTo(state, kNeutralX, kNeutralY);
             break;
         case MotionPose::LookLeft:
-            moveTo(state, -8, 0);
+            moveTo(state, -300, 0);
             break;
         case MotionPose::LookRight:
-            moveTo(state, 8, 0);
+            moveTo(state, 300, 0);
             break;
         case MotionPose::LookUp:
-            moveTo(state, 0, 6);
+            moveTo(state, 0, 300);
             break;
         case MotionPose::LookDown:
-            moveTo(state, 0, -6);
+            moveTo(state, 0, 0);
             break;
     }
 }
@@ -99,4 +100,3 @@ int MotionController::clampAxis(const char* axis, int requested, int minValue, i
 }
 
 }  // namespace stackchan
-

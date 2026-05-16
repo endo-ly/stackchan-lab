@@ -178,11 +178,17 @@ MOVE:0:0
 OK MOVE x=0 y=0
 ```
 
+`MOVE` values are passed to StackChan-BSP as deci-degrees: `10 = 1 degree`.
+The current firmware allows:
+
+- `x`: `-450` to `450`
+- `y`: `0` to `450`
+
 If requested values are outside the safe range, firmware clamps them and marks the response.
 
 ```text
 MOVE:999:999
-OK MOVE x=15 y=10 clamped=true
+OK MOVE x=450 y=450 clamped=true
 ```
 
 Errors:
