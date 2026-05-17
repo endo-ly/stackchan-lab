@@ -25,6 +25,8 @@ const char* toString(CommandType type)
             return "RESET";
         case CommandType::Audio:
             return "AUDIO";
+        case CommandType::Events:
+            return "EVENTS";
         case CommandType::Unknown:
             return "UNKNOWN";
     }
@@ -55,6 +57,10 @@ const char* toString(ProtocolError error)
             return "AUDIO_INVALID_FORMAT";
         case ProtocolError::AudioTransferFailed:
             return "AUDIO_TRANSFER_FAILED";
+        case ProtocolError::EventQueueError:
+            return "EVENT_QUEUE_ERROR";
+        case ProtocolError::UnsupportedInput:
+            return "UNSUPPORTED_INPUT";
         case ProtocolError::InternalError:
             return "INTERNAL_ERROR";
     }

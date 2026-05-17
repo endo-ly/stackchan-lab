@@ -72,6 +72,9 @@ CommandType CommandParser::parseCommandType(const String& commandName) const
     if (commandName == "AUDIO") {
         return CommandType::Audio;
     }
+    if (commandName == "EVENTS") {
+        return CommandType::Events;
+    }
 
     return CommandType::Unknown;
 }

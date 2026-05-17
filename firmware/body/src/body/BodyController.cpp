@@ -19,6 +19,7 @@ void BodyController::begin()
     display_.begin();
     display_.showBoot();
     audio_.begin();
+    input_.begin();
     led_.begin();
     motion_.begin(state_);
 
@@ -44,6 +45,7 @@ void BodyController::update()
         face_.setMouthOpen(false);
         led_.setMood(state_.mood());
     }
+    input_.update();
     face_.update();
     led_.update();
     motion_.update();
@@ -138,6 +140,16 @@ const FaceState& BodyController::getFaceState() const
 const AudioState& BodyController::getAudioState() const
 {
     return audio_.getState();
+}
+
+InputController& BodyController::input()
+{
+    return input_;
+}
+
+const InputController& BodyController::input() const
+{
+    return input_;
 }
 
 void BodyController::logState() const

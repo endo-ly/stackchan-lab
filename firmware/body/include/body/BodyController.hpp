@@ -4,6 +4,7 @@
 #include "body/AudioController.hpp"
 #include "body/DisplayController.hpp"
 #include "body/FaceController.hpp"
+#include "body/InputController.hpp"
 #include "body/LedController.hpp"
 #include "body/MotionController.hpp"
 
@@ -28,6 +29,8 @@ public:
     const BodyState& getState() const;
     const FaceState& getFaceState() const;
     const AudioState& getAudioState() const;
+    InputController& input();
+    const InputController& input() const;
 
 private:
     void logState() const;
@@ -35,6 +38,7 @@ private:
     BodyState state_;
     DisplayController display_;
     AudioController audio_;
+    InputController input_;
     FaceController face_;
     LedController led_;
     MotionController motion_;

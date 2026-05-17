@@ -34,7 +34,8 @@ face:happy
 Face:happy
 ```
 
-Responses are one line and start with `OK`, `READY`, `ERR`, or `WARN`.
+Responses usually start with `OK`, `READY`, `ERR`, or `WARN`.
+`EVENTS` returns a multi-line response ending with `END EVENTS`.
 Debug logs start with `[` and should not be treated as command responses.
 
 ## Commands
@@ -54,7 +55,7 @@ Returns firmware, protocol, and board versions.
 
 ```text
 VERSION
-OK VERSION firmware=0.6.0 protocol=0.1.0 board=stackchan-cores3
+OK VERSION firmware=0.7.0 protocol=0.1.0 board=stackchan-cores3
 ```
 
 ### HELP
@@ -63,7 +64,7 @@ Returns the supported command list and supported FACE/LED/POSE values.
 
 ```text
 HELP
-OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR
 ```
 
 ### STATUS
@@ -72,7 +73,7 @@ Returns the current body state.
 
 ```text
 STATUS
-OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0 gazeX=0 gazeY=0 speaking=false blinking=false
+OK STATUS mode=Ready expression=Neutral mood=Calm pose=Neutral x=0 y=0 gazeX=0 gazeY=0 speaking=false blinking=false eventCount=0 latestEvent=none latestTarget=none latestValue=none touchActive=false buttonActive=false imuMoving=false
 ```
 
 Fields:
@@ -87,6 +88,13 @@ Fields:
 - `gazeY`
 - `speaking`
 - `blinking`
+- `eventCount`
+- `latestEvent`
+- `latestTarget`
+- `latestValue`
+- `touchActive`
+- `buttonActive`
+- `imuMoving`
 
 ### FACE
 
@@ -264,7 +272,7 @@ READY AUDIO WAV size=245760
 OK AUDIO PLAY size=245760
 ```
 
-Supported WAV shape in Phase 6:
+Supported WAV shape:
 
 - PCM
 - mono
@@ -282,6 +290,59 @@ ERR AUDIO_INVALID_FORMAT
 ERR AUDIO_TRANSFER_FAILED
 ```
 
+### EVENTS
+
+Returns the current input event queue. Reading events does not clear the queue.
+
+No events:
+
+```text
+EVENTS
+OK EVENTS count=0
+```
+
+With events:
+
+```text
+EVENTS
+OK EVENTS count=2
+EVENT id=1 type=touch target=screen value=tap timestamp=12345678 x=123 y=87
+EVENT id=2 type=imu target=device value=shake timestamp=12345900
+END EVENTS
+```
+
+Each event has:
+
+- `id`: boot-local event sequence number
+- `type`: `touch`, `button`, or `imu`
+- `target`: `screen`, `button_a`, `button_b`, `button_c`, or `device`
+- `value`: `tap`, `pressed`, `moved`, or `shake`
+- `timestamp`: `millis()` timestamp
+- `x`, `y`: touch coordinates. Present only for touch events.
+
+### EVENTS:LATEST
+
+Returns only the latest input event.
+
+```text
+EVENTS:LATEST
+OK EVENTS LATEST none
+```
+
+```text
+EVENTS:LATEST
+OK EVENTS LATEST id=2 type=imu target=device value=shake timestamp=12345900
+```
+
+### EVENTS:CLEAR
+
+Clears the input event queue.
+
+```text
+EVENTS:CLEAR
+OK EVENTS CLEAR
+```
+
 ## Responses
 
 Successful responses:
@@ -296,6 +357,9 @@ OK AUDIO STATUS state=Idle playing=false volume=180 size=0 received=0
 OK AUDIO VOLUME 180
 OK AUDIO STOP
 OK AUDIO PLAY size=245760
+OK EVENTS count=0
+OK EVENTS LATEST none
+OK EVENTS CLEAR
 ```
 
 Error responses:
@@ -311,6 +375,8 @@ ERR AUDIO_BUSY
 ERR AUDIO_RECEIVE_TIMEOUT
 ERR AUDIO_INVALID_FORMAT
 ERR AUDIO_TRANSFER_FAILED
+ERR EVENT_QUEUE_ERROR
+ERR UNSUPPORTED_INPUT
 ERR INTERNAL_ERROR
 ```
 
@@ -328,6 +394,8 @@ Warning responses are reserved for later use. Servo clamping is reported as `cla
 - `AUDIO_RECEIVE_TIMEOUT`
 - `AUDIO_INVALID_FORMAT`
 - `AUDIO_TRANSFER_FAILED`
+- `EVENT_QUEUE_ERROR`
+- `UNSUPPORTED_INPUT`
 - `INTERNAL_ERROR`
 
 ## Manual Examples
@@ -348,4 +416,7 @@ HELP
 AUDIO:STATUS
 AUDIO:VOLUME:180
 AUDIO:STOP
+EVENTS
+EVENTS:LATEST
+EVENTS:CLEAR
 ```

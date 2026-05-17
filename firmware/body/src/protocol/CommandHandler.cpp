@@ -40,7 +40,7 @@ String CommandHandler::handle(const ParsedCommand& command)
                 + " board=" + kBoardName;
         case CommandType::Help:
             return hasNoArgs(command)
-                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV"
+                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR"
                 : tooManyArguments(command);
         case CommandType::Status:
             return handleStatus(command);
@@ -56,11 +56,89 @@ String CommandHandler::handle(const ParsedCommand& command)
             return handleReset(command);
         case CommandType::Audio:
             return handleAudio(command);
+        case CommandType::Events:
+            return handleEvents(command);
         case CommandType::Unknown:
             return String("ERR ") + toString(ProtocolError::UnknownCommand) + " command=" + command.name;
     }
 
     return String("ERR ") + toString(ProtocolError::InternalError);
+}
+
+String CommandHandler::handleEvents(const ParsedCommand& command)
+{
+    if (command.argCount == 0) {
+        return handleEventsList(command);
+    }
+
+    const String action = normalized(command.args[0]);
+    if (action == "latest") {
+        return handleEventsLatest(command);
+    }
+    if (action == "clear") {
+        return handleEventsClear(command);
+    }
+
+    return invalidArgument("events_command", command.args[0]);
+}
+
+String CommandHandler::handleEventsList(const ParsedCommand& command) const
+{
+    if (!hasNoArgs(command)) {
+        return tooManyArguments(command);
+    }
+
+    const InputController& input = body_.input();
+    String response = "OK EVENTS count=";
+    response += input.eventCount();
+    if (!input.hasEvents()) {
+        return response;
+    }
+
+    for (size_t index = 0; index < input.eventCount(); ++index) {
+        InputEvent event;
+        if (!input.getEvent(index, event)) {
+            return String("ERR ") + toString(ProtocolError::EventQueueError);
+        }
+        response += "\n";
+        response += formatInputEvent(event);
+    }
+    response += "\nEND EVENTS";
+    return response;
+}
+
+String CommandHandler::handleEventsLatest(const ParsedCommand& command) const
+{
+    if (command.argCount > 1) {
+        return tooManyArguments(command);
+    }
+
+    InputEvent event;
+    if (!body_.input().getLatestEvent(event)) {
+        return "OK EVENTS LATEST none";
+    }
+
+    String response = "OK EVENTS LATEST id=";
+    response += event.id;
+    response += " type=";
+    response += event.type;
+    response += " target=";
+    response += event.target;
+    response += " value=";
+    response += event.value;
+    response += " timestamp=";
+    response += event.timestamp;
+    return response;
+}
+
+String CommandHandler::handleEventsClear(const ParsedCommand& command)
+{
+    if (command.argCount > 1) {
+        return tooManyArguments(command);
+    }
+
+    body_.input().clearEvents();
+    return "OK EVENTS CLEAR";
 }
 
 uint8_t* CommandHandler::wavReceiveBuffer()
@@ -308,6 +386,21 @@ String CommandHandler::handleStatus(const ParsedCommand& command) const
     response += face.isSpeaking() ? "true" : "false";
     response += " blinking=";
     response += face.isBlinking() ? "true" : "false";
+    const InputState& input = body_.input().getState();
+    response += " eventCount=";
+    response += body_.input().eventCount();
+    response += " latestEvent=";
+    response += input.latestType();
+    response += " latestTarget=";
+    response += input.latestTarget();
+    response += " latestValue=";
+    response += input.latestValue();
+    response += " touchActive=";
+    response += input.touchActive() ? "true" : "false";
+    response += " buttonActive=";
+    response += input.buttonActive() ? "true" : "false";
+    response += " imuMoving=";
+    response += input.imuMoving() ? "true" : "false";
     return response;
 }
 

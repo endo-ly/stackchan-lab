@@ -22,6 +22,10 @@ private:
     String handleAudioVolume(const ParsedCommand& command);
     String handleAudioStop(const ParsedCommand& command);
     String handleAudioWav(const ParsedCommand& command);
+    String handleEvents(const ParsedCommand& command);
+    String handleEventsList(const ParsedCommand& command) const;
+    String handleEventsLatest(const ParsedCommand& command) const;
+    String handleEventsClear(const ParsedCommand& command);
 
     String handleFace(const ParsedCommand& command);
     String handleLed(const ParsedCommand& command);
