@@ -27,6 +27,8 @@ const char* toString(CommandType type)
             return "AUDIO";
         case CommandType::Events:
             return "EVENTS";
+        case CommandType::Wifi:
+            return "WIFI";
         case CommandType::Unknown:
             return "UNKNOWN";
     }

@@ -1,0 +1,378 @@
+#include "network/HttpServerController.hpp"
+
+#include <ArduinoJson.h>
+
+#include "protocol/ProtocolTypes.hpp"
+
+namespace stackchan::network {
+namespace {
+
+String lower(const String& value)
+{
+    String result = value;
+    result.toLowerCase();
+    return result;
+}
+
+bool parseExpressionValue(const String& value, Expression& expression)
+{
+    const String v = lower(value);
+    if (v == "neutral") expression = Expression::Neutral;
+    else if (v == "happy") expression = Expression::Happy;
+    else if (v == "sad") expression = Expression::Sad;
+    else if (v == "angry") expression = Expression::Angry;
+    else if (v == "sleepy") expression = Expression::Sleepy;
+    else if (v == "doubt") expression = Expression::Doubt;
+    else return false;
+    return true;
+}
+
+bool parseMoodValue(const String& value, Mood& mood)
+{
+    const String v = lower(value);
+    if (v == "calm") mood = Mood::Calm;
+    else if (v == "active") mood = Mood::Active;
+    else if (v == "speaking") mood = Mood::Speaking;
+    else if (v == "warning") mood = Mood::Warning;
+    else if (v == "off") mood = Mood::Off;
+    else return false;
+    return true;
+}
+
+bool parsePoseValue(const String& value, MotionPose& pose)
+{
+    const String v = lower(value);
+    if (v == "neutral") pose = MotionPose::Neutral;
+    else if (v == "look_left") pose = MotionPose::LookLeft;
+    else if (v == "look_right") pose = MotionPose::LookRight;
+    else if (v == "look_up") pose = MotionPose::LookUp;
+    else if (v == "look_down") pose = MotionPose::LookDown;
+    else return false;
+    return true;
+}
+
+void addEvent(JsonArray array, const InputEvent& event)
+{
+    JsonObject item = array.add<JsonObject>();
+    item["id"] = event.id;
+    item["type"] = event.type;
+    item["target"] = event.target;
+    item["value"] = event.value;
+    item["timestamp"] = event.timestamp;
+    if (event.x >= 0 && event.y >= 0) {
+        item["x"] = event.x;
+        item["y"] = event.y;
+    }
+}
+
+}  // namespace
+
+HttpServerController::HttpServerController(BodyController& body, WiFiManager& wifi, DeviceAuth& auth)
+    : body_(body)
+    , wifi_(wifi)
+    , auth_(auth)
+    , server_(80)
+{
+}
+
+void HttpServerController::begin()
+{
+    if (running_) {
+        return;
+    }
+    static const char* headerKeys[] = {"X-StackChan-Token"};
+    server_.collectHeaders(headerKeys, 1);
+    registerRoutes();
+    server_.begin();
+    running_ = true;
+    Serial.println("[HTTP] server started");
+}
+
+void HttpServerController::update()
+{
+    if (running_) {
+        server_.handleClient();
+    }
+}
+
+bool HttpServerController::isRunning() const
+{
+    return running_;
+}
+
+void HttpServerController::registerRoutes()
+{
+    server_.on("/health", HTTP_GET, [this]() { handleHealth(); });
+    server_.on("/version", HTTP_GET, [this]() { handleVersion(); });
+    server_.on("/status", HTTP_GET, [this]() { handleStatus(); });
+    server_.on("/capabilities", HTTP_GET, [this]() { handleCapabilities(); });
+    server_.on("/face", HTTP_POST, [this]() { handleFace(); });
+    server_.on("/led", HTTP_POST, [this]() { handleLed(); });
+    server_.on("/pose", HTTP_POST, [this]() { handlePose(); });
+    server_.on("/move", HTTP_POST, [this]() { handleMove(); });
+    server_.on("/reset", HTTP_POST, [this]() { handleReset(); });
+    server_.on("/play-wav", HTTP_POST, [this]() { handlePlayWav(); });
+    server_.on("/audio/status", HTTP_GET, [this]() { handleAudioStatus(); });
+    server_.on("/audio/volume", HTTP_POST, [this]() { handleAudioVolume(); });
+    server_.on("/audio/stop", HTTP_POST, [this]() { handleAudioStop(); });
+    server_.on("/events", HTTP_GET, [this]() { handleEvents(); });
+    server_.on("/events/latest", HTTP_GET, [this]() { handleLatestEvent(); });
+    server_.on("/events/clear", HTTP_POST, [this]() { handleClearEvents(); });
+    server_.on("/wifi/status", HTTP_GET, [this]() { handleWifiStatus(); });
+    server_.on("/wifi/connect", HTTP_POST, [this]() { handleWifiConnect(); });
+    server_.on("/wifi/clear", HTTP_POST, [this]() { handleWifiClear(); });
+    server_.on("/camera/snapshot", HTTP_GET, [this]() { handleCameraSnapshot(); });
+    server_.onNotFound([this]() { sendError(404, "NOT_FOUND", "Route not found"); });
+}
+
+bool HttpServerController::requireAuth()
+{
+    if (auth_.authorize(server_)) {
+        return true;
+    }
+    sendError(401, "UNAUTHORIZED", "Invalid token");
+    return false;
+}
+
+void HttpServerController::sendOk(const String& dataJson)
+{
+    server_.send(200, "application/json", String("{\"ok\":true,\"data\":") + dataJson + "}");
+}
+
+void HttpServerController::sendError(int status, const char* code, const String& message)
+{
+    JsonDocument doc;
+    doc["ok"] = false;
+    JsonObject error = doc["error"].to<JsonObject>();
+    error["code"] = code;
+    error["message"] = message;
+    String response;
+    serializeJson(doc, response);
+    server_.send(status, "application/json", response);
+}
+
+String HttpServerController::readBody()
+{
+    return server_.arg("plain");
+}
+
+void HttpServerController::handleHealth()
+{
+    sendOk("{\"service\":\"stackchan-device\",\"status\":\"ok\"}");
+}
+
+void HttpServerController::handleVersion()
+{
+    sendOk(String("{\"firmware\":\"") + protocol::kFirmwareVersion + "\",\"protocol\":\"" + protocol::kProtocolVersion + "\",\"transport\":\"wifi\",\"board\":\"" + protocol::kBoardName + "\"}");
+}
+
+void HttpServerController::handleStatus()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    const BodyState& state = body_.getState();
+    const FaceState& face = body_.getFaceState();
+    const InputState& input = body_.input().getState();
+    doc["mode"] = toString(state.mode());
+    doc["expression"] = toString(state.expression());
+    doc["mood"] = toString(state.mood());
+    doc["pose"] = toString(state.pose());
+    doc["x"] = state.servoX();
+    doc["y"] = state.servoY();
+    doc["gazeX"] = face.gazeX();
+    doc["gazeY"] = face.gazeY();
+    doc["speaking"] = face.isSpeaking();
+    doc["blinking"] = face.isBlinking();
+    doc["eventCount"] = body_.input().eventCount();
+    doc["latestEvent"] = input.latestType();
+    doc["latestTarget"] = input.latestTarget();
+    doc["latestValue"] = input.latestValue();
+    doc["touchActive"] = input.touchActive();
+    doc["buttonActive"] = input.buttonActive();
+    doc["imuMoving"] = input.imuMoving();
+    JsonObject network = doc["network"].to<JsonObject>();
+    const NetworkState& net = wifi_.state();
+    network["connected"] = net.connected;
+    network["ip"] = net.ip;
+    network["hostname"] = net.hostname;
+    network["rssi"] = net.rssi;
+    String data;
+    serializeJson(doc, data);
+    sendOk(data);
+}
+
+void HttpServerController::handleCapabilities()
+{
+    sendOk("{\"expressions\":[\"neutral\",\"happy\",\"sad\",\"angry\",\"sleepy\",\"doubt\"],\"moods\":[\"calm\",\"active\",\"speaking\",\"warning\",\"off\"],\"poses\":[\"neutral\",\"look_left\",\"look_right\",\"look_up\",\"look_down\"]}");
+}
+
+void HttpServerController::handleFace()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, readBody())) return sendError(400, "INVALID_ARGUMENT", "Invalid JSON");
+    Expression expression;
+    if (!parseExpressionValue(doc["expression"] | "", expression)) return sendError(400, "INVALID_ARGUMENT", "Unsupported expression");
+    body_.setExpression(expression);
+    sendOk(String("{\"expression\":\"") + lower(doc["expression"].as<String>()) + "\"}");
+}
+
+void HttpServerController::handleLed()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, readBody())) return sendError(400, "INVALID_ARGUMENT", "Invalid JSON");
+    Mood mood;
+    if (!parseMoodValue(doc["mood"] | "", mood)) return sendError(400, "INVALID_ARGUMENT", "Unsupported mood");
+    body_.setMood(mood);
+    sendOk(String("{\"mood\":\"") + lower(doc["mood"].as<String>()) + "\"}");
+}
+
+void HttpServerController::handlePose()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, readBody())) return sendError(400, "INVALID_ARGUMENT", "Invalid JSON");
+    MotionPose pose;
+    if (!parsePoseValue(doc["pose"] | "", pose)) return sendError(400, "INVALID_ARGUMENT", "Unsupported pose");
+    body_.setPose(pose);
+    sendOk(String("{\"pose\":\"") + lower(doc["pose"].as<String>()) + "\"}");
+}
+
+void HttpServerController::handleMove()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, readBody())) return sendError(400, "INVALID_ARGUMENT", "Invalid JSON");
+    if (!doc["x"].is<int>() || !doc["y"].is<int>()) return sendError(400, "INVALID_ARGUMENT", "x and y must be integers");
+    body_.moveTo(doc["x"].as<int>(), doc["y"].as<int>());
+    const BodyState& state = body_.getState();
+    sendOk(String("{\"x\":") + state.servoX() + ",\"y\":" + state.servoY() + "}");
+}
+
+void HttpServerController::handleReset()
+{
+    if (!requireAuth()) return;
+    body_.setExpression(Expression::Neutral);
+    body_.setMood(Mood::Calm);
+    body_.setPose(MotionPose::Neutral);
+    body_.stopAudio();
+    sendOk("{\"reset\":true}");
+}
+
+void HttpServerController::handlePlayWav()
+{
+    if (!requireAuth()) return;
+    const size_t size = server_.arg("plain").length();
+    String error;
+    if (!body_.prepareWav(size, error)) return sendError(error == "AUDIO_TOO_LARGE" ? 413 : 409, error.c_str(), error);
+    memcpy(body_.wavReceiveBuffer(), server_.arg("plain").c_str(), size);
+    if (!body_.playPreparedWav(size, error)) return sendError(400, error.c_str(), error);
+    sendOk(String("{\"playing\":true,\"size\":") + size + "}");
+}
+
+void HttpServerController::handleAudioStatus()
+{
+    if (!requireAuth()) return;
+    const AudioState& audio = body_.getAudioState();
+    sendOk(String("{\"state\":\"") + toString(audio.state()) + "\",\"playing\":" + (audio.isPlaying() ? "true" : "false") + ",\"volume\":" + audio.volume() + ",\"size\":" + audio.currentSize() + ",\"received\":" + audio.receivedSize() + "}");
+}
+
+void HttpServerController::handleAudioVolume()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, readBody()) || !doc["volume"].is<int>()) return sendError(400, "INVALID_ARGUMENT", "volume must be an integer");
+    const int volume = doc["volume"].as<int>();
+    if (!body_.setAudioVolume(volume)) return sendError(400, "INVALID_ARGUMENT", "volume must be between 0 and 255");
+    sendOk(String("{\"volume\":") + volume + "}");
+}
+
+void HttpServerController::handleAudioStop()
+{
+    if (!requireAuth()) return;
+    body_.stopAudio();
+    sendOk("{\"stopped\":true}");
+}
+
+void HttpServerController::handleEvents()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    const size_t count = body_.input().eventCount();
+    doc["count"] = count;
+    JsonArray events = doc["events"].to<JsonArray>();
+    for (size_t i = 0; i < count; ++i) {
+        InputEvent event;
+        if (body_.input().getEvent(i, event)) addEvent(events, event);
+    }
+    String data;
+    serializeJson(doc, data);
+    sendOk(data);
+}
+
+void HttpServerController::handleLatestEvent()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    InputEvent event;
+    if (body_.input().getLatestEvent(event)) {
+        JsonObject item = doc["event"].to<JsonObject>();
+        item["id"] = event.id;
+        item["type"] = event.type;
+        item["target"] = event.target;
+        item["value"] = event.value;
+        item["timestamp"] = event.timestamp;
+        if (event.x >= 0 && event.y >= 0) {
+            item["x"] = event.x;
+            item["y"] = event.y;
+        }
+    } else {
+        doc["event"] = nullptr;
+    }
+    String data;
+    serializeJson(doc, data);
+    sendOk(data);
+}
+
+void HttpServerController::handleClearEvents()
+{
+    if (!requireAuth()) return;
+    body_.input().clearEvents();
+    sendOk("{\"cleared\":true}");
+}
+
+void HttpServerController::handleWifiStatus()
+{
+    if (!requireAuth()) return;
+    const NetworkState& net = wifi_.state();
+    JsonDocument doc;
+    doc["connected"] = net.connected;
+    doc["ssid"] = net.ssid;
+    doc["ip"] = net.ip;
+    doc["hostname"] = net.hostname;
+    doc["rssi"] = net.rssi;
+    doc["auth"] = net.authEnabled;
+    String data;
+    serializeJson(doc, data);
+    sendOk(data);
+}
+
+void HttpServerController::handleWifiConnect()
+{
+    if (!requireAuth()) return;
+    sendOk("{\"accepted\":true}");
+}
+
+void HttpServerController::handleWifiClear()
+{
+    if (!requireAuth()) return;
+    sendError(400, "INVALID_ARGUMENT", "Use Serial WIFI:CLEAR in Phase 8");
+}
+
+void HttpServerController::handleCameraSnapshot()
+{
+    sendError(501, "NOT_IMPLEMENTED", "Camera snapshot is not implemented in Phase 8");
+}
+
+}  // namespace stackchan::network

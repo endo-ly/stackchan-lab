@@ -5,7 +5,8 @@
 StackChan Body FirmwareをUSBシリアル経由で制御するためのテキストプロトコル。
 
 このプロトコルは、PCやミニPCからStackChanの身体制御を行うためのもの。
-意味理解、会話状態管理、HTTP API、Wi-Fi接続は扱わない。
+意味理解、会話状態管理、上位アプリ統合は扱わない。
+Phase 8ではWi-Fi設定用コマンドだけをUSB Serialに追加する。
 
 ## Transport
 
@@ -55,7 +56,7 @@ Returns firmware, protocol, and board versions.
 
 ```text
 VERSION
-OK VERSION firmware=0.7.0 protocol=0.1.0 board=stackchan-cores3
+OK VERSION firmware=0.8.0 protocol=0.1.0 board=stackchan-cores3
 ```
 
 ### HELP
@@ -64,7 +65,7 @@ Returns the supported command list and supported FACE/LED/POSE values.
 
 ```text
 HELP
-OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR
 ```
 
 ### STATUS
@@ -343,6 +344,59 @@ EVENTS:CLEAR
 OK EVENTS CLEAR
 ```
 
+### WIFI
+
+Controls saved Wi-Fi configuration over USB Serial. This is the official Phase 8 setup and recovery path.
+
+#### WIFI:STATUS
+
+```text
+WIFI:STATUS
+OK WIFI STATUS connected=true ssid=home-wifi ip=192.168.0.123 hostname=stackchan-001 rssi=-55 auth=true
+```
+
+#### WIFI:SET_JSON
+
+Starts a JSON Wi-Fi configuration transfer. Normal users should use the Bridge setup CLI instead of sending this manually.
+
+The CLI sends `WIFI:SET_JSON:<size>`, waits for `READY WIFI JSON`, then writes the JSON payload bytes.
+
+JSON fields:
+
+- `ssid`
+- `password`
+- `hostname`
+- `authToken`
+
+`authToken` is optional. When it is empty, StackChan device HTTP API runs in development mode without token auth.
+
+Errors:
+
+```text
+ERR WIFI_JSON_INVALID
+ERR WIFI_CONFIG_SAVE_FAILED
+ERR WIFI_CONNECT_FAILED
+ERR WIFI_JSON_RECEIVE_TIMEOUT
+```
+
+#### WIFI:CONNECT
+
+Connects using the saved Wi-Fi configuration.
+
+```text
+WIFI:CONNECT
+OK WIFI CONNECTED ip=192.168.0.123 hostname=stackchan-001
+```
+
+#### WIFI:CLEAR
+
+Clears the saved Wi-Fi configuration.
+
+```text
+WIFI:CLEAR
+OK WIFI CLEAR
+```
+
 ## Responses
 
 Successful responses:
@@ -360,6 +414,7 @@ OK AUDIO PLAY size=245760
 OK EVENTS count=0
 OK EVENTS LATEST none
 OK EVENTS CLEAR
+OK WIFI STATUS connected=true ssid=home-wifi ip=192.168.0.123 hostname=stackchan-001 rssi=-55 auth=true
 ```
 
 Error responses:
@@ -377,6 +432,10 @@ ERR AUDIO_INVALID_FORMAT
 ERR AUDIO_TRANSFER_FAILED
 ERR EVENT_QUEUE_ERROR
 ERR UNSUPPORTED_INPUT
+ERR WIFI_JSON_INVALID
+ERR WIFI_CONFIG_SAVE_FAILED
+ERR WIFI_CONNECT_FAILED
+ERR WIFI_JSON_RECEIVE_TIMEOUT
 ERR INTERNAL_ERROR
 ```
 
@@ -396,6 +455,10 @@ Warning responses are reserved for later use. Servo clamping is reported as `cla
 - `AUDIO_TRANSFER_FAILED`
 - `EVENT_QUEUE_ERROR`
 - `UNSUPPORTED_INPUT`
+- `WIFI_JSON_INVALID`
+- `WIFI_CONFIG_SAVE_FAILED`
+- `WIFI_CONNECT_FAILED`
+- `WIFI_JSON_RECEIVE_TIMEOUT`
 - `INTERNAL_ERROR`
 
 ## Manual Examples
@@ -419,4 +482,7 @@ AUDIO:STOP
 EVENTS
 EVENTS:LATEST
 EVENTS:CLEAR
+WIFI:STATUS
+WIFI:CONNECT
+WIFI:CLEAR
 ```

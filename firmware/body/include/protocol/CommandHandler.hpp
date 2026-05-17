@@ -4,17 +4,19 @@
 
 #include "body/BodyController.hpp"
 #include "body/BodyTypes.hpp"
+#include "network/NetworkController.hpp"
 #include "protocol/ProtocolTypes.hpp"
 
 namespace stackchan::protocol {
 
 class CommandHandler {
 public:
-    explicit CommandHandler(BodyController& body);
+    explicit CommandHandler(BodyController& body, network::NetworkController* network = nullptr);
 
     String handle(const ParsedCommand& command);
     uint8_t* wavReceiveBuffer();
     String completeWavTransfer(size_t size);
+    String completeWifiJsonTransfer(const String& json);
 
 private:
     String handleAudio(const ParsedCommand& command);
@@ -26,6 +28,11 @@ private:
     String handleEventsList(const ParsedCommand& command) const;
     String handleEventsLatest(const ParsedCommand& command) const;
     String handleEventsClear(const ParsedCommand& command);
+    String handleWifi(const ParsedCommand& command);
+    String handleWifiStatus(const ParsedCommand& command) const;
+    String handleWifiSetJson(const ParsedCommand& command);
+    String handleWifiConnect(const ParsedCommand& command);
+    String handleWifiClear(const ParsedCommand& command);
 
     String handleFace(const ParsedCommand& command);
     String handleLed(const ParsedCommand& command);
@@ -46,6 +53,7 @@ private:
     String tooManyArguments(const ParsedCommand& command) const;
 
     BodyController& body_;
+    network::NetworkController* network_;
 };
 
 }  // namespace stackchan::protocol

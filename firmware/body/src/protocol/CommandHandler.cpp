@@ -1,5 +1,7 @@
 #include "protocol/CommandHandler.hpp"
 
+#include <ArduinoJson.h>
+
 namespace stackchan::protocol {
 namespace {
 
@@ -21,8 +23,9 @@ String okWithValue(const char* command, const String& value)
 
 }  // namespace
 
-CommandHandler::CommandHandler(BodyController& body)
+CommandHandler::CommandHandler(BodyController& body, network::NetworkController* network)
     : body_(body)
+    , network_(network)
 {
 }
 
@@ -40,7 +43,7 @@ String CommandHandler::handle(const ParsedCommand& command)
                 + " board=" + kBoardName;
         case CommandType::Help:
             return hasNoArgs(command)
-                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR"
+                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR"
                 : tooManyArguments(command);
         case CommandType::Status:
             return handleStatus(command);
@@ -58,11 +61,102 @@ String CommandHandler::handle(const ParsedCommand& command)
             return handleAudio(command);
         case CommandType::Events:
             return handleEvents(command);
+        case CommandType::Wifi:
+            return handleWifi(command);
         case CommandType::Unknown:
             return String("ERR ") + toString(ProtocolError::UnknownCommand) + " command=" + command.name;
     }
 
     return String("ERR ") + toString(ProtocolError::InternalError);
+}
+
+String CommandHandler::handleWifi(const ParsedCommand& command)
+{
+    if (network_ == nullptr) {
+        return "ERR NETWORK_NOT_CONFIGURED";
+    }
+    if (command.argCount == 0) {
+        return missingArgument("wifi_command");
+    }
+    const String action = normalized(command.args[0]);
+    if (action == "status") return handleWifiStatus(command);
+    if (action == "set_json") return handleWifiSetJson(command);
+    if (action == "connect") return handleWifiConnect(command);
+    if (action == "clear") return handleWifiClear(command);
+    return invalidArgument("wifi_command", command.args[0]);
+}
+
+String CommandHandler::handleWifiStatus(const ParsedCommand& command) const
+{
+    if (command.argCount > 1) return tooManyArguments(command);
+    const network::NetworkState& state = network_->getState();
+    String response = "OK WIFI STATUS connected=";
+    response += state.connected ? "true" : "false";
+    response += " ssid=";
+    response += state.ssid;
+    response += " ip=";
+    response += state.ip;
+    response += " hostname=";
+    response += state.hostname;
+    response += " rssi=";
+    response += state.rssi;
+    response += " auth=";
+    response += state.authEnabled ? "true" : "false";
+    return response;
+}
+
+String CommandHandler::handleWifiSetJson(const ParsedCommand& command)
+{
+    if (command.argCount < 2) return missingArgument("size");
+    if (command.argCount > 2) return tooManyArguments(command);
+    size_t size = 0;
+    if (!parseSize(command.args[1], size) || size == 0 || size > 1024) {
+        return invalidArgument("size", command.args[1]);
+    }
+    String response = "READY WIFI JSON size=";
+    response += size;
+    return response;
+}
+
+String CommandHandler::handleWifiConnect(const ParsedCommand& command)
+{
+    if (command.argCount > 1) return tooManyArguments(command);
+    if (!network_->connect()) return "ERR WIFI_CONNECT_FAILED reason=timeout";
+    const network::NetworkState& state = network_->getState();
+    return String("OK WIFI CONNECTED ip=") + state.ip + " hostname=" + state.hostname;
+}
+
+String CommandHandler::handleWifiClear(const ParsedCommand& command)
+{
+    if (command.argCount > 1) return tooManyArguments(command);
+    if (!network_->clearConfig()) return "ERR WIFI_CONFIG_CLEAR_FAILED";
+    return "OK WIFI CLEAR";
+}
+
+String CommandHandler::completeWifiJsonTransfer(const String& json)
+{
+    if (network_ == nullptr) {
+        return "ERR NETWORK_NOT_CONFIGURED";
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, json)) {
+        return "ERR WIFI_JSON_INVALID";
+    }
+    network::WiFiConfig config;
+    config.ssid = doc["ssid"] | "";
+    config.password = doc["password"] | "";
+    config.hostname = doc["hostname"] | "stackchan-001";
+    config.authToken = doc["authToken"] | "";
+    if (config.ssid.length() == 0 || config.hostname.length() == 0) {
+        return "ERR WIFI_JSON_INVALID";
+    }
+    if (!network_->wifi().saveConfig(config)) {
+        return "ERR WIFI_CONFIG_SAVE_FAILED";
+    }
+    if (!network_->connect(config)) {
+        return "ERR WIFI_CONNECT_FAILED";
+    }
+    return String("OK WIFI SET ssid=") + config.ssid + " hostname=" + config.hostname;
 }
 
 String CommandHandler::handleEvents(const ParsedCommand& command)

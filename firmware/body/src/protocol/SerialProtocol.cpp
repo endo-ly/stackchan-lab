@@ -2,8 +2,8 @@
 
 namespace stackchan::protocol {
 
-SerialProtocol::SerialProtocol(BodyController& body)
-    : handler_(body)
+SerialProtocol::SerialProtocol(BodyController& body, network::NetworkController* network)
+    : handler_(body, network)
 {
 }
 
@@ -35,6 +35,7 @@ void SerialProtocol::processLine(const String& line)
     const String response = handler_.handle(command);
     writeResponse(response);
     maybeReceiveWav(response);
+    maybeReceiveWifiJson(response);
 }
 
 bool SerialProtocol::maybeReceiveWav(const String& response)
@@ -69,6 +70,30 @@ bool SerialProtocol::maybeReceiveWav(const String& response)
     return true;
 }
 
+bool SerialProtocol::maybeReceiveWifiJson(const String& response)
+{
+    size_t size = 0;
+    if (!parseReadyWifiJsonSize(response, size)) {
+        return false;
+    }
+    String json;
+    json.reserve(size);
+    const uint32_t startedAt = millis();
+    while (json.length() < size) {
+        if (Serial.available() > 0) {
+            json += static_cast<char>(Serial.read());
+            continue;
+        }
+        if (millis() - startedAt > 5000) {
+            writeResponse("ERR WIFI_JSON_RECEIVE_TIMEOUT");
+            return false;
+        }
+        delay(1);
+    }
+    writeResponse(handler_.completeWifiJsonTransfer(json));
+    return true;
+}
+
 bool SerialProtocol::parseReadyWavSize(const String& response, size_t& size) const
 {
     if (!response.startsWith("READY AUDIO WAV size=")) {
@@ -76,6 +101,20 @@ bool SerialProtocol::parseReadyWavSize(const String& response, size_t& size) con
     }
 
     const String value = response.substring(String("READY AUDIO WAV size=").length());
+    const int parsed = value.toInt();
+    if (parsed <= 0) {
+        return false;
+    }
+    size = static_cast<size_t>(parsed);
+    return true;
+}
+
+bool SerialProtocol::parseReadyWifiJsonSize(const String& response, size_t& size) const
+{
+    if (!response.startsWith("READY WIFI JSON size=")) {
+        return false;
+    }
+    const String value = response.substring(String("READY WIFI JSON size=").length());
     const int parsed = value.toInt();
     if (parsed <= 0) {
         return false;

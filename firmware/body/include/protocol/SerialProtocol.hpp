@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "body/BodyController.hpp"
+#include "network/NetworkController.hpp"
 #include "protocol/CommandHandler.hpp"
 #include "protocol/CommandParser.hpp"
 
@@ -10,7 +11,7 @@ namespace stackchan::protocol {
 
 class SerialProtocol {
 public:
-    explicit SerialProtocol(BodyController& body);
+    explicit SerialProtocol(BodyController& body, network::NetworkController* network = nullptr);
 
     void begin();
     void update();
@@ -18,7 +19,9 @@ public:
 
 private:
     bool maybeReceiveWav(const String& response);
+    bool maybeReceiveWifiJson(const String& response);
     bool parseReadyWavSize(const String& response, size_t& size) const;
+    bool parseReadyWifiJsonSize(const String& response, size_t& size) const;
     void handleChar(char value);
     void writeResponse(const String& response);
     void resetInput();
