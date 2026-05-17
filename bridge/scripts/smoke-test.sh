@@ -43,6 +43,8 @@ request GET /version
 request GET /capabilities
 request GET /status
 request GET /audio/status
+request GET /events
+request GET /events/latest
 request POST /face '{"expression":"happy"}'
 request POST /face '{"expression":"doubt"}'
 expect_status 400 POST /face '{"expression":"thinking"}'
@@ -57,4 +59,6 @@ request POST /preset '{"name":"speaking"}'
 curl -fsS -X POST "$BASE_URL/play-wav" -F "file=@test-assets/sample.wav" | jq .
 request GET /audio/status
 request POST /audio/stop
+request POST /events/clear
+request GET /events
 request POST /reset

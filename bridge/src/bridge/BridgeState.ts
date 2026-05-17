@@ -1,4 +1,4 @@
-import type { BodyStatus, DeviceVersion } from "../types/body.js";
+import type { BodyStatus, DeviceVersion, InputEvent, ReceivedInputEvent } from "../types/body.js";
 
 export class BridgeState {
   private connected = false;
@@ -15,6 +15,11 @@ export class BridgeState {
   private gazeY?: number;
   private speaking?: boolean;
   private blinking?: boolean;
+  private eventCount?: number;
+  private latestEvent?: ReceivedInputEvent;
+  private touchActive?: boolean;
+  private buttonActive?: boolean;
+  private imuMoving?: boolean;
   private lastCommandAt?: string;
   private lastResponseAt?: string;
   private lastError?: string;
@@ -51,6 +56,10 @@ export class BridgeState {
     this.gazeY = status.gazeY ?? this.gazeY;
     this.speaking = status.speaking ?? this.speaking;
     this.blinking = status.blinking ?? this.blinking;
+    this.eventCount = status.eventCount ?? this.eventCount;
+    this.touchActive = status.touchActive ?? this.touchActive;
+    this.buttonActive = status.buttonActive ?? this.buttonActive;
+    this.imuMoving = status.imuMoving ?? this.imuMoving;
   }
 
   setExpression(expression: string): void {
@@ -68,6 +77,26 @@ export class BridgeState {
   setMove(x: number, y: number): void {
     this.x = x;
     this.y = y;
+  }
+
+  updateEvents(count: number, events: InputEvent[]): void {
+    this.eventCount = count;
+    const latest = events.at(-1);
+    if (latest) {
+      this.latestEvent = withReceivedAt(latest);
+    }
+  }
+
+  updateLatestEvent(event: InputEvent | null): void {
+    if (event) {
+      this.eventCount = Math.max(this.eventCount ?? 0, 1);
+      this.latestEvent = withReceivedAt(event);
+    }
+  }
+
+  clearEvents(): void {
+    this.eventCount = 0;
+    this.latestEvent = undefined;
   }
 
   getVersion(): DeviceVersion {
@@ -95,9 +124,23 @@ export class BridgeState {
       gazeY: this.gazeY,
       speaking: this.speaking,
       blinking: this.blinking,
+      eventCount: this.eventCount,
+      latestEvent: this.latestEvent?.type,
+      latestTarget: this.latestEvent?.target,
+      latestValue: this.latestEvent?.value,
+      touchActive: this.touchActive,
+      buttonActive: this.buttonActive,
+      imuMoving: this.imuMoving,
       lastCommandAt: this.lastCommandAt,
       lastResponseAt: this.lastResponseAt,
       lastError: this.lastError,
     };
   }
+}
+
+function withReceivedAt(event: InputEvent): ReceivedInputEvent {
+  return {
+    ...event,
+    receivedAt: new Date().toISOString(),
+  };
 }

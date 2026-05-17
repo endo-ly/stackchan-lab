@@ -58,6 +58,12 @@ export class StackChanSerialClient implements StackChanClient {
     return queued;
   }
 
+  async sendCommandLines(command: string, endPrefix: string): Promise<string[]> {
+    const queued = this.commandQueue.then(() => this.sendCommandLinesNow(command, endPrefix));
+    this.commandQueue = queued.catch(() => undefined);
+    return queued;
+  }
+
   async sendBinary(data: Buffer): Promise<string> {
     const queued = this.commandQueue.then(() => this.sendBinaryNow(data));
     this.commandQueue = queued.catch(() => undefined);
@@ -75,19 +81,12 @@ export class StackChanSerialClient implements StackChanClient {
   }
 
   private async sendCommandNow(command: string): Promise<string> {
-    if (!this.isConnected()) {
-      await this.tryReconnect();
-    }
-    if (!this.port || !this.parser || !this.isConnected()) {
-      throw new BridgeError("STACKCHAN_NOT_CONNECTED", "StackChan serial port is not connected");
-    }
-    const port = this.port;
-    const parser = this.parser;
+    const { port, parser } = await this.requireConnection();
 
     return new Promise<string>((resolve, reject) => {
       const onData = (line: string) => {
         const trimmed = line.trim();
-        if (trimmed.length === 0 || trimmed.startsWith("[")) {
+        if (!isCommandResponse(trimmed)) {
           return;
         }
         cleanup();
@@ -109,12 +108,48 @@ export class StackChanSerialClient implements StackChanClient {
 
       parser.on("data", onData);
       port.on("error", onError);
-      port.write(`${command}\n`, (error) => {
-        if (error) {
-          cleanup();
-          reject(new BridgeError("STACKCHAN_NOT_CONNECTED", `Failed to write command: ${command}`, error));
+      this.flushThenWrite(port, command, cleanup, reject);
+    });
+  }
+
+  private async sendCommandLinesNow(command: string, endPrefix: string): Promise<string[]> {
+    const { port, parser } = await this.requireConnection();
+
+    return new Promise<string[]>((resolve, reject) => {
+      const lines: string[] = [];
+      const onData = (line: string) => {
+        const trimmed = line.trim();
+        if (!isMultilineResponse(trimmed, endPrefix)) {
+          return;
         }
-      });
+        lines.push(trimmed);
+        if (trimmed.startsWith("ERR ") || trimmed.startsWith(endPrefix)) {
+          cleanup();
+          resolve(lines);
+          return;
+        }
+        if (lines.length === 1 && trimmed.startsWith("OK EVENTS count=0")) {
+          cleanup();
+          resolve(lines);
+        }
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(new BridgeError("STACKCHAN_NOT_CONNECTED", "Serial port error", error));
+      };
+      const cleanup = () => {
+        clearTimeout(timer);
+        parser.off("data", onData);
+        port.off("error", onError);
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new BridgeError("EVENTS_TIMEOUT", `Timed out waiting for multiline response to ${command}`));
+      }, this.config.timeoutMs);
+
+      parser.on("data", onData);
+      port.on("error", onError);
+      this.flushThenWrite(port, command, cleanup, reject);
     });
   }
 
@@ -128,7 +163,7 @@ export class StackChanSerialClient implements StackChanClient {
     return new Promise<string>((resolve, reject) => {
       const onData = (line: string) => {
         const trimmed = line.trim();
-        if (trimmed.length === 0 || trimmed.startsWith("[")) {
+        if (!isCommandResponse(trimmed)) {
           return;
         }
         cleanup();
@@ -153,6 +188,32 @@ export class StackChanSerialClient implements StackChanClient {
       void writeChunks(port, data).catch((error: unknown) => {
         cleanup();
         reject(new BridgeError("AUDIO_TRANSFER_FAILED", "Failed to write WAV data", error));
+      });
+    });
+  }
+
+  private async requireConnection(): Promise<{ port: SerialPort; parser: ReadlineParser }> {
+    if (!this.isConnected()) {
+      await this.tryReconnect();
+    }
+    if (!this.port || !this.parser || !this.isConnected()) {
+      throw new BridgeError("STACKCHAN_NOT_CONNECTED", "StackChan serial port is not connected");
+    }
+    return { port: this.port, parser: this.parser };
+  }
+
+  private flushThenWrite(port: SerialPort, command: string, cleanup: () => void, reject: (reason?: unknown) => void): void {
+    port.flush((flushError) => {
+      if (flushError) {
+        cleanup();
+        reject(new BridgeError("STACKCHAN_NOT_CONNECTED", `Failed to flush serial port before command: ${command}`, flushError));
+        return;
+      }
+      port.write(`${command}\n`, (writeError) => {
+        if (writeError) {
+          cleanup();
+          reject(new BridgeError("STACKCHAN_NOT_CONNECTED", `Failed to write command: ${command}`, writeError));
+        }
       });
     });
   }
@@ -187,4 +248,12 @@ async function writeChunks(port: SerialPort, data: Buffer): Promise<void> {
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+function isCommandResponse(line: string): boolean {
+  return line.startsWith("OK ") || line.startsWith("READY ") || line.startsWith("ERR ") || line.startsWith("WARN ");
+}
+
+function isMultilineResponse(line: string, endPrefix: string): boolean {
+  return isCommandResponse(line) || line.startsWith("EVENT ") || line.startsWith(endPrefix);
 }

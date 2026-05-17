@@ -20,7 +20,7 @@ The bridge does not handle conversation state, personality, memory, TTS, or STT.
 - Node.js
 - npm
 - USB Serial connection to StackChan
-- StackChan Body Firmware Phase 6 or later
+- StackChan Body Firmware Phase 7 or later
 
 ## Setup
 
@@ -116,6 +116,8 @@ The smoke test checks:
 - `GET /capabilities`
 - `GET /status`
 - `GET /audio/status`
+- `GET /events`
+- `GET /events/latest`
 - `POST /face`
 - `POST /led`
 - `POST /pose`
@@ -125,6 +127,8 @@ The smoke test checks:
 - `POST /preset`
 - `POST /play-wav`
 - `POST /audio/stop`
+- `POST /events/clear`
+- `GET /events`
 - `POST /reset`
 - invalid `/face` values return HTTP 400
 
@@ -282,6 +286,30 @@ curl -X POST http://127.0.0.1:8787/play-wav \
   -F "file=@test-assets/sample.wav"
 ```
 
+### GET /events
+
+Get the current firmware-side input event queue. Reading events does not clear them.
+
+```bash
+curl http://127.0.0.1:8787/events
+```
+
+### GET /events/latest
+
+Get the latest input event, or `null` when no event exists.
+
+```bash
+curl http://127.0.0.1:8787/events/latest
+```
+
+### POST /events/clear
+
+Clear the firmware-side input event queue.
+
+```bash
+curl -X POST http://127.0.0.1:8787/events/clear
+```
+
 ### GET /presets
 
 List body presets.
@@ -311,10 +339,15 @@ Supported presets:
 - `sleepy`
 - `error`
 
-## Phase 6 Scope
+## Phase 7 Scope
 
 Implemented:
 
+- `GET /events`
+- `GET /events/latest`
+- `POST /events/clear`
+- Event response parser
+- Mock event support
 - `POST /play-wav`
 - `GET /audio/status`
 - `POST /audio/volume`
@@ -328,6 +361,8 @@ Not implemented:
 - STT
 - Wake Word
 - TTS generation
+- WebSocket
+- Server-Sent Events
 - External application integration
 
 ## Error Shape
@@ -357,7 +392,6 @@ Failure:
 
 - TTS
 - STT
-- Input events
 - WebSocket
 - Server-Sent Events
 - Authentication

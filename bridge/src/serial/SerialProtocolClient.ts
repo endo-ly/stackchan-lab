@@ -1,5 +1,5 @@
 import { BridgeError } from "../bridge/BridgeError.js";
-import type { AudioStatus, BodyStatus, DeviceVersion, Expression, Mood, Pose } from "../types/body.js";
+import type { AudioStatus, BodyStatus, DeviceVersion, Expression, InputEvent, InputEvents, Mood, Pose } from "../types/body.js";
 import type { SafeMove } from "../bridge/safety.js";
 import type { StackChanClient } from "./StackChanClient.js";
 import { parseSerialResponse } from "./parseSerialResponse.js";
@@ -43,6 +43,13 @@ export class SerialProtocolClient {
       gazeY: numberField(response.fields.gazeY, "gazeY"),
       speaking: booleanField(response.fields.speaking, "speaking"),
       blinking: booleanField(response.fields.blinking, "blinking"),
+      eventCount: numberField(response.fields.eventCount, "eventCount"),
+      latestEvent: response.fields.latestEvent,
+      latestTarget: response.fields.latestTarget,
+      latestValue: response.fields.latestValue,
+      touchActive: booleanField(response.fields.touchActive, "touchActive"),
+      buttonActive: booleanField(response.fields.buttonActive, "buttonActive"),
+      imuMoving: booleanField(response.fields.imuMoving, "imuMoving"),
     };
   }
 
@@ -110,6 +117,59 @@ export class SerialProtocolClient {
     expectAudioResponse(finalResponse, "PLAY");
   }
 
+  async events(): Promise<InputEvents> {
+    const lines = await this.client.sendCommandLines("EVENTS", "END EVENTS");
+    if (lines.length === 0) {
+      throw new BridgeError("EVENT_PARSE_ERROR", "EVENTS response is empty");
+    }
+
+    const header = parseSerialResponse(lines[0]);
+    if (header.kind === "err") {
+      handleNonOkResponse(header);
+    }
+    if (header.kind !== "ok") {
+      throw new BridgeError("EVENT_PARSE_ERROR", `Expected OK EVENTS header: ${lines[0]}`);
+    }
+    expectCommand(header.command, "EVENTS", header.raw);
+
+    const count = numberField(header.fields.count, "count");
+    if (count === undefined) {
+      throw new BridgeError("EVENT_PARSE_ERROR", `EVENTS count is missing: ${lines[0]}`);
+    }
+    if (count === 0) {
+      return { count: 0, events: [] };
+    }
+    if (lines.at(-1) !== "END EVENTS") {
+      throw new BridgeError("EVENT_PARSE_ERROR", "EVENTS response is missing END EVENTS", { lines });
+    }
+
+    const events = lines.slice(1, -1).map(parseEventLine);
+    if (events.length !== count) {
+      throw new BridgeError("EVENT_PARSE_ERROR", `EVENTS count mismatch: count=${count} actual=${events.length}`, { lines });
+    }
+    return { count, events };
+  }
+
+  async latestEvent(): Promise<InputEvent | null> {
+    const response = await this.send("EVENTS:LATEST");
+    expectCommand(response.command, "EVENTS", response.raw);
+    if (response.args[0] !== "LATEST") {
+      throw new BridgeError("EVENT_PARSE_ERROR", `Expected EVENTS LATEST response: ${response.raw}`);
+    }
+    if (response.args[1] === "none") {
+      return null;
+    }
+    return eventFromFields(response.fields, response.raw);
+  }
+
+  async clearEvents(): Promise<void> {
+    const response = await this.send("EVENTS:CLEAR");
+    expectCommand(response.command, "EVENTS", response.raw);
+    if (response.args[0] !== "CLEAR") {
+      throw new BridgeError("EVENT_PARSE_ERROR", `Expected EVENTS CLEAR response: ${response.raw}`);
+    }
+  }
+
   private async send(command: string) {
     const raw = await this.client.sendCommand(command);
     const response = parseSerialResponse(raw);
@@ -141,6 +201,9 @@ function expectAudioResponse(response: { command: string; args: string[]; raw: s
 
 function handleNonOkResponse(response: { kind: string; code?: string; raw: string; fields?: Record<string, string> }): never {
   const code = response.code ?? "AUDIO_TRANSFER_FAILED";
+  if (code === "EVENT_PARSE_ERROR" || code === "EVENTS_TIMEOUT" || code === "EVENT_QUEUE_ERROR" || code === "UNSUPPORTED_INPUT") {
+    throw new BridgeError(code, `StackChan returned ${code}`, response);
+  }
   if (
     code === "AUDIO_TOO_LARGE" ||
     code === "AUDIO_INVALID_FORMAT" ||
@@ -151,6 +214,45 @@ function handleNonOkResponse(response: { kind: string; code?: string; raw: strin
     throw new BridgeError(code as "AUDIO_TOO_LARGE" | "AUDIO_INVALID_FORMAT" | "AUDIO_BUSY" | "AUDIO_TRANSFER_FAILED" | "AUDIO_RECEIVE_TIMEOUT", `StackChan returned ${code}`, response);
   }
   throw new BridgeError("STACKCHAN_ERROR", `StackChan returned ${code}`, response);
+}
+
+function parseEventLine(line: string): InputEvent {
+  const parts = line.trim().split(/\s+/).filter(Boolean);
+  if (parts[0] !== "EVENT") {
+    throw new BridgeError("EVENT_PARSE_ERROR", `Expected EVENT line: ${line}`);
+  }
+  return eventFromFields(parseFields(parts.slice(1)), line);
+}
+
+function eventFromFields(fields: Record<string, string>, raw: string): InputEvent {
+  const id = numberField(fields.id, "id");
+  const timestamp = numberField(fields.timestamp, "timestamp");
+  const type = fields.type;
+  const target = fields.target;
+  const value = fields.value;
+  if (id === undefined || timestamp === undefined || !type || !target || !value) {
+    throw new BridgeError("EVENT_PARSE_ERROR", `Malformed event: ${raw}`);
+  }
+  return {
+    id,
+    type,
+    target,
+    value,
+    timestamp,
+    x: numberField(fields.x, "x"),
+    y: numberField(fields.y, "y"),
+  };
+}
+
+function parseFields(parts: string[]): Record<string, string> {
+  return Object.fromEntries(
+    parts
+      .map((part) => {
+        const index = part.indexOf("=");
+        return index > 0 ? [part.slice(0, index), part.slice(index + 1)] : undefined;
+      })
+      .filter((entry): entry is [string, string] => entry !== undefined),
+  );
 }
 
 function numberField(value: string | undefined, field: string): number | undefined {

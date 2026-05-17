@@ -8,6 +8,8 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
   server.get("/status", async () => success(await bridge.getStatus()));
   server.get("/capabilities", async () => success(bridge.getCapabilities()));
   server.get("/audio/status", async () => success(await bridge.getAudioStatus()));
+  server.get("/events", async () => success(await bridge.getEvents()));
+  server.get("/events/latest", async () => success(await bridge.getLatestEvent()));
   server.get("/presets", async () => success(bridge.getPresets()));
 
   server.post("/face", async (request) => {
@@ -38,6 +40,8 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
   });
 
   server.post("/audio/stop", async () => success(await bridge.stopAudio()));
+
+  server.post("/events/clear", async () => success(await bridge.clearEvents()));
 
   server.post("/preset", async (request) => {
     const body = requireObject(request.body);
@@ -110,6 +114,7 @@ function statusFor(code: string): number {
     case "INVALID_ARGUMENT":
     case "CONFIG_ERROR":
     case "PROTOCOL_PARSE_ERROR":
+    case "EVENT_PARSE_ERROR":
     case "AUDIO_TOO_LARGE":
     case "AUDIO_INVALID_FORMAT":
     case "UNSUPPORTED_PRESET":
@@ -117,6 +122,7 @@ function statusFor(code: string): number {
     case "STACKCHAN_NOT_CONNECTED":
       return 503;
     case "STACKCHAN_TIMEOUT":
+    case "EVENTS_TIMEOUT":
     case "AUDIO_RECEIVE_TIMEOUT":
       return 504;
     case "AUDIO_BUSY":
@@ -124,6 +130,8 @@ function statusFor(code: string): number {
     case "STACKCHAN_ERROR":
     case "AUDIO_TRANSFER_FAILED":
     case "PRESET_APPLY_FAILED":
+    case "EVENT_QUEUE_ERROR":
+    case "UNSUPPORTED_INPUT":
       return 500;
     default:
       return 500;

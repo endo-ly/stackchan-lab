@@ -6,7 +6,7 @@ serial:
   mode: "real"
   port: "/dev/stackchan"
   baud_rate: 115200
-  timeout_ms: 1000
+  timeout_ms: 3000
   reconnect:
     enabled: true
     interval_ms: 2000

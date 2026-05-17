@@ -50,7 +50,7 @@ export class StackChanBridge {
 
     return {
       bridge: {
-        version: "0.6.0",
+        version: "0.7.0",
       },
       device: this.state.getVersion(),
     };
@@ -139,6 +139,24 @@ export class StackChanBridge {
     validateWav(data);
     await this.runDeviceCommand(() => this.protocol.playWav(data));
     return { playing: true, size: data.length };
+  }
+
+  async getEvents() {
+    const result = await this.runDeviceCommand(() => this.protocol.events());
+    this.state.updateEvents(result.count, result.events);
+    return result;
+  }
+
+  async getLatestEvent() {
+    const event = await this.runDeviceCommand(() => this.protocol.latestEvent());
+    this.state.updateLatestEvent(event);
+    return { event };
+  }
+
+  async clearEvents() {
+    await this.runDeviceCommand(() => this.protocol.clearEvents());
+    this.state.clearEvents();
+    return { cleared: true };
   }
 
   async applyPreset(name: string) {

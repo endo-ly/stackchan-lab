@@ -22,6 +22,15 @@ export class MockStackChanClient implements StackChanClient {
     received: 0,
   };
   private pendingWavSize = 0;
+  private events = [
+    {
+      id: 1,
+      type: "touch",
+      target: "screen",
+      value: "tap",
+      timestamp: 12345678,
+    },
+  ];
 
   async connect(): Promise<void> {
     this.connected = true;
@@ -62,9 +71,16 @@ export class MockStackChanClient implements StackChanClient {
         return "OK RESET";
       case "AUDIO":
         return this.audioCommand(args);
+      case "EVENTS":
+        return this.eventsCommand(args);
       default:
         return `ERR UNKNOWN_COMMAND command=${name ?? ""}`;
     }
+  }
+
+  async sendCommandLines(command: string, _endPrefix: string): Promise<string[]> {
+    const response = await this.sendCommand(command);
+    return response.split("\n");
   }
 
   async sendBinary(data: Buffer): Promise<string> {
@@ -88,7 +104,8 @@ export class MockStackChanClient implements StackChanClient {
 
   private statusLine(): string {
     const s = this.state;
-    return `OK STATUS mode=${s.mode} expression=${s.expression} mood=${s.mood} pose=${s.pose} x=${s.x} y=${s.y} gazeX=${s.gazeX} gazeY=${s.gazeY} speaking=${s.speaking} blinking=${s.blinking}`;
+    const latest = this.events.at(-1);
+    return `OK STATUS mode=${s.mode} expression=${s.expression} mood=${s.mood} pose=${s.pose} x=${s.x} y=${s.y} gazeX=${s.gazeX} gazeY=${s.gazeY} speaking=${s.speaking} blinking=${s.blinking} eventCount=${this.events.length} latestEvent=${latest?.type ?? "none"} latestTarget=${latest?.target ?? "none"} latestValue=${latest?.value ?? "none"} touchActive=false buttonActive=false imuMoving=false`;
   }
 
   private setFace(expression: string | undefined): string {
@@ -170,6 +187,32 @@ export class MockStackChanClient implements StackChanClient {
       return `READY AUDIO WAV size=${size}`;
     }
     return `ERR INVALID_ARGUMENT audio_command=${args[0] ?? ""}`;
+  }
+
+  private eventsCommand(args: string[]): string {
+    const action = args[0]?.toLowerCase();
+    if (!action) {
+      if (this.events.length === 0) {
+        return "OK EVENTS count=0";
+      }
+      return [
+        `OK EVENTS count=${this.events.length}`,
+        ...this.events.map((event) => `EVENT id=${event.id} type=${event.type} target=${event.target} value=${event.value} timestamp=${event.timestamp}`),
+        "END EVENTS",
+      ].join("\n");
+    }
+    if (action === "latest") {
+      const latest = this.events.at(-1);
+      if (!latest) {
+        return "OK EVENTS LATEST none";
+      }
+      return `OK EVENTS LATEST id=${latest.id} type=${latest.type} target=${latest.target} value=${latest.value} timestamp=${latest.timestamp}`;
+    }
+    if (action === "clear") {
+      this.events = [];
+      return "OK EVENTS CLEAR";
+    }
+    return `ERR INVALID_ARGUMENT events_command=${args[0] ?? ""}`;
   }
 }
 
