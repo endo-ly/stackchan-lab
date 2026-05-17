@@ -1,9 +1,20 @@
 export type SerialMode = "real" | "mock";
+export type DeviceTransportKind = "serial" | "wifi";
+
+export type WifiConfig = {
+  baseUrl: string;
+  token?: string;
+  timeoutMs: number;
+  healthCheckIntervalMs: number;
+};
 
 export type BridgeConfig = {
   server: {
     host: string;
     port: number;
+  };
+  device: {
+    transport: DeviceTransportKind;
   };
   serial: {
     mode: SerialMode;
@@ -15,6 +26,7 @@ export type BridgeConfig = {
       intervalMs: number;
     };
   };
+  wifi: WifiConfig;
   safety: {
     minX: number;
     maxX: number;

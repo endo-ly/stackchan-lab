@@ -120,14 +120,20 @@ function statusFor(code: string): number {
     case "UNSUPPORTED_PRESET":
       return 400;
     case "STACKCHAN_NOT_CONNECTED":
+    case "DEVICE_UNREACHABLE":
       return 503;
     case "STACKCHAN_TIMEOUT":
+    case "DEVICE_TIMEOUT":
     case "EVENTS_TIMEOUT":
     case "AUDIO_RECEIVE_TIMEOUT":
       return 504;
+    case "DEVICE_UNAUTHORIZED":
+      return 502;
     case "AUDIO_BUSY":
       return 503;
     case "STACKCHAN_ERROR":
+    case "TRANSPORT_ERROR":
+    case "TRANSPORT_NOT_CONFIGURED":
     case "AUDIO_TRANSFER_FAILED":
     case "PRESET_APPLY_FAILED":
     case "EVENT_QUEUE_ERROR":

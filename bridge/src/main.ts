@@ -5,13 +5,14 @@ import { MockStackChanClient } from "./mock/MockStackChanClient.js";
 import { SerialProtocolClient } from "./serial/SerialProtocolClient.js";
 import { StackChanSerialClient } from "./serial/StackChanSerialClient.js";
 import type { StackChanClient } from "./serial/StackChanClient.js";
+import type { DeviceTransport } from "./transport/DeviceTransport.js";
+import { SerialTransport } from "./transport/SerialTransport.js";
+import { WifiTransport } from "./transport/WifiTransport.js";
 
 const configPath = process.env.STACKCHAN_BRIDGE_CONFIG ?? process.argv[2] ?? "config.yaml";
 const config = loadConfig(configPath);
-const deviceClient: StackChanClient =
-  config.serial.mode === "mock" ? new MockStackChanClient() : new StackChanSerialClient(config.serial);
-const protocol = new SerialProtocolClient(deviceClient);
-const bridge = new StackChanBridge(config, protocol);
+const transport = createTransport();
+const bridge = new StackChanBridge(config, transport);
 const server = await createServer(bridge);
 
 await bridge.start();
@@ -31,3 +32,14 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   void shutdown().then(() => process.exit(0));
 });
+
+function createTransport(): DeviceTransport {
+  if (config.serial.mode === "mock") {
+    return new SerialTransport(new SerialProtocolClient(new MockStackChanClient()));
+  }
+  if (config.device.transport === "wifi") {
+    return new WifiTransport(config.wifi);
+  }
+  const deviceClient: StackChanClient = new StackChanSerialClient(config.serial);
+  return new SerialTransport(new SerialProtocolClient(deviceClient));
+}

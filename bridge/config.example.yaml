@@ -2,6 +2,9 @@ server:
   host: "127.0.0.1"
   port: 8787
 
+device:
+  transport: "serial" # serial | wifi
+
 serial:
   mode: "real"
   port: "/dev/stackchan"
@@ -10,6 +13,12 @@ serial:
   reconnect:
     enabled: true
     interval_ms: 2000
+
+wifi:
+  base_url: "http://192.168.0.123"
+  token: ""
+  timeout_ms: 5000
+  health_check_interval_ms: 5000
 
 safety:
   min_x: -300

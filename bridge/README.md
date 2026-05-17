@@ -4,12 +4,12 @@
 
 StackChan Bridge is a local HTTP API server for controlling StackChan Body Firmware.
 
-It translates HTTP JSON requests into StackChan Serial Protocol v0 commands.
+It translates HTTP JSON requests into StackChan device commands.
 
 ```text
 HTTP client
   -> stackchan-bridge
-  -> USB Serial
+  -> USB Serial or Wi-Fi HTTP
   -> StackChan Body Firmware
 ```
 
@@ -19,8 +19,9 @@ The bridge does not handle conversation state, personality, memory, TTS, or STT.
 
 - Node.js
 - npm
-- USB Serial connection to StackChan
-- StackChan Body Firmware Phase 7 or later
+- USB Serial connection to StackChan for serial mode
+- Wi-Fi reachable StackChan for wifi mode
+- StackChan Body Firmware Phase 8 or later for wifi mode
 
 ## Setup
 
@@ -47,10 +48,25 @@ cp config.example.yaml config.yaml
 Default real-device configuration:
 
 ```yaml
+device:
+  transport: "serial"
+
 serial:
   mode: "real"
   port: "/dev/stackchan"
   baud_rate: 115200
+```
+
+Wi-Fi transport configuration:
+
+```yaml
+device:
+  transport: "wifi"
+
+wifi:
+  base_url: "http://192.168.0.123"
+  token: "<device-token>"
+  timeout_ms: 5000
 ```
 
 `config.yaml` is ignored by git because it is local machine configuration.
@@ -131,6 +147,107 @@ The smoke test checks:
 - `GET /events`
 - `POST /reset`
 - invalid `/face` values return HTTP 400
+
+## Phase 8 Scope
+
+Implemented:
+
+- DeviceTransport abstraction
+- SerialTransport
+- WifiTransport
+- transport selection by config
+- wireless StackChan control
+- wireless audio playback
+- wireless event retrieval
+- device unreachable / timeout / unauthorized error mapping
+
+Config:
+
+- `device.transport = serial | wifi`
+- `wifi.base_url`
+- `wifi.token`
+- `wifi.timeout_ms`
+
+Serial mode:
+
+```text
+Bridge HTTP API -> SerialTransport -> USB Serial -> StackChan
+```
+
+Wi-Fi mode:
+
+```text
+Bridge HTTP API -> WifiTransport -> HTTP over Wi-Fi -> StackChan
+```
+
+The external Bridge API stays the same in both modes.
+
+## Wi-Fi Mode Smoke Test
+
+First save Wi-Fi credentials to the device over USB Serial.
+
+Stop any running bridge process before using the setup CLI, because USB Serial can only be opened by one process at a time.
+
+```bash
+cp config.example.yaml config.yaml
+npm run wifi:setup -- config.yaml
+```
+
+`config.yaml` is local machine configuration. The Wi-Fi SSID, password, and device token are not written to this file by the setup CLI.
+
+The CLI prompts for:
+
+- SSID
+- Wi-Fi password, hidden while typing
+- hostname
+- device auth token, hidden while typing
+
+Generate a device auth token locally:
+
+```bash
+openssl rand -hex 32
+```
+
+The password and token are sent directly to StackChan over USB Serial and are not written to the repository.
+
+To regenerate the token later:
+
+```bash
+openssl rand -hex 32
+npm run wifi:setup -- config.yaml
+```
+
+Enter the new token when prompted, then update `wifi.token` in local `config.yaml` to the same value.
+
+After setup, configure `config.yaml`:
+
+```yaml
+device:
+  transport: "wifi"
+
+wifi:
+  base_url: "http://192.168.0.123"
+  token: "<device-token>"
+  timeout_ms: 5000
+```
+
+Start the bridge:
+
+```bash
+npm run dev -- config.yaml
+```
+
+Then run:
+
+```bash
+curl http://127.0.0.1:8787/status
+
+curl -X POST http://127.0.0.1:8787/preset \
+  -H "Content-Type: application/json" \
+  -d '{"name":"thinking"}'
+
+curl http://127.0.0.1:8787/events
+```
 
 ## HTTP API
 

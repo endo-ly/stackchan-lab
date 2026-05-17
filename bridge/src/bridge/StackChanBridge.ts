@@ -4,7 +4,7 @@ import { bodyPresets } from "./presets.js";
 import { clampMove } from "./safety.js";
 import { validateWav } from "./wav.js";
 import type { BridgeConfig } from "../config/types.js";
-import type { SerialProtocolClient } from "../serial/SerialProtocolClient.js";
+import type { DeviceTransport } from "../transport/DeviceTransport.js";
 import { commands, expressions, moods, poses, presets, type Expression, type Mood, type Pose, type PresetName } from "../types/body.js";
 
 export class StackChanBridge {
@@ -12,12 +12,12 @@ export class StackChanBridge {
 
   constructor(
     private readonly config: BridgeConfig,
-    private readonly protocol: SerialProtocolClient,
+    private readonly transport: DeviceTransport,
   ) {}
 
   async start(): Promise<void> {
     try {
-      await this.protocol.connect();
+      await this.transport.connect();
     } catch (error) {
       this.state.markDisconnected(error instanceof Error ? error.message : String(error));
       if (this.config.serial.mode === "real") {
@@ -28,7 +28,7 @@ export class StackChanBridge {
   }
 
   async stop(): Promise<void> {
-    await this.protocol.disconnect();
+    await this.transport.disconnect();
   }
 
   getHealth() {
@@ -41,7 +41,7 @@ export class StackChanBridge {
   async getVersion() {
     try {
       this.state.markCommand();
-      const device = await this.protocol.version();
+      const device = await this.transport.version();
       this.state.updateVersion(device);
       this.state.markResponse();
     } catch (error) {
@@ -50,7 +50,7 @@ export class StackChanBridge {
 
     return {
       bridge: {
-        version: "0.7.0",
+        version: "0.8.0",
       },
       device: this.state.getVersion(),
     };
@@ -59,7 +59,7 @@ export class StackChanBridge {
   async getStatus() {
     try {
       this.state.markCommand();
-      const status = await this.protocol.status();
+      const status = await this.transport.status();
       this.state.updateStatus(status);
       this.state.markResponse();
     } catch (error) {
@@ -83,21 +83,21 @@ export class StackChanBridge {
 
   async setFace(expression: string) {
     assertAllowed(expression, expressions, "expression");
-    await this.runDeviceCommand(() => this.protocol.setFace(expression as Expression));
+    await this.runDeviceCommand(() => this.transport.setFace(expression as Expression));
     this.state.setExpression(titleCase(expression));
     return { expression };
   }
 
   async setLed(mood: string) {
     assertAllowed(mood, moods, "mood");
-    await this.runDeviceCommand(() => this.protocol.setLed(mood as Mood));
+    await this.runDeviceCommand(() => this.transport.setLed(mood as Mood));
     this.state.setMood(titleCase(mood));
     return { mood };
   }
 
   async setPose(pose: string) {
     assertAllowed(pose, poses, "pose");
-    await this.runDeviceCommand(() => this.protocol.setPose(pose as Pose));
+    await this.runDeviceCommand(() => this.transport.setPose(pose as Pose));
     this.state.setPose(titleCase(pose));
     return { pose };
   }
@@ -107,54 +107,54 @@ export class StackChanBridge {
       throw new BridgeError("INVALID_ARGUMENT", "x and y must be finite numbers");
     }
     const safeMove = clampMove({ x, y }, this.config.safety);
-    await this.runDeviceCommand(() => this.protocol.move(safeMove));
+    await this.runDeviceCommand(() => this.transport.move(safeMove));
     this.state.setMove(safeMove.x, safeMove.y);
     return safeMove;
   }
 
   async reset() {
-    await this.runDeviceCommand(() => this.protocol.reset());
+    await this.runDeviceCommand(() => this.transport.reset());
     await this.getStatus();
     return { reset: true };
   }
 
   async getAudioStatus() {
-    return await this.runDeviceCommand(() => this.protocol.audioStatus());
+    return await this.runDeviceCommand(() => this.transport.audioStatus());
   }
 
   async setAudioVolume(volume: number) {
     if (!Number.isInteger(volume) || volume < 0 || volume > 255) {
       throw new BridgeError("INVALID_ARGUMENT", "volume must be an integer between 0 and 255");
     }
-    await this.runDeviceCommand(() => this.protocol.setAudioVolume(volume));
+    await this.runDeviceCommand(() => this.transport.setAudioVolume(volume));
     return { volume };
   }
 
   async stopAudio() {
-    await this.runDeviceCommand(() => this.protocol.stopAudio());
+    await this.runDeviceCommand(() => this.transport.stopAudio());
     return { stopped: true };
   }
 
   async playWav(data: Buffer) {
     validateWav(data);
-    await this.runDeviceCommand(() => this.protocol.playWav(data));
+    await this.runDeviceCommand(() => this.transport.playWav(data));
     return { playing: true, size: data.length };
   }
 
   async getEvents() {
-    const result = await this.runDeviceCommand(() => this.protocol.events());
+    const result = await this.runDeviceCommand(() => this.transport.events());
     this.state.updateEvents(result.count, result.events);
     return result;
   }
 
   async getLatestEvent() {
-    const event = await this.runDeviceCommand(() => this.protocol.latestEvent());
+    const event = await this.runDeviceCommand(() => this.transport.latestEvent());
     this.state.updateLatestEvent(event);
     return { event };
   }
 
   async clearEvents() {
-    await this.runDeviceCommand(() => this.protocol.clearEvents());
+    await this.runDeviceCommand(() => this.transport.clearEvents());
     this.state.clearEvents();
     return { cleared: true };
   }

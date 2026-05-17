@@ -3,12 +3,15 @@ import { resolve } from "node:path";
 import YAML from "yaml";
 import { BridgeError } from "../bridge/BridgeError.js";
 import { validateSafetyConfig } from "../bridge/safety.js";
-import type { BridgeConfig, SerialMode } from "./types.js";
+import type { BridgeConfig, DeviceTransportKind, SerialMode } from "./types.js";
 
 type RawConfig = {
   server?: {
     host?: unknown;
     port?: unknown;
+  };
+  device?: {
+    transport?: unknown;
   };
   serial?: {
     mode?: unknown;
@@ -19,6 +22,12 @@ type RawConfig = {
       enabled?: unknown;
       interval_ms?: unknown;
     };
+  };
+  wifi?: {
+    base_url?: unknown;
+    token?: unknown;
+    timeout_ms?: unknown;
+    health_check_interval_ms?: unknown;
   };
   safety?: {
     min_x?: unknown;
@@ -39,11 +48,18 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
   if (mode !== "real" && mode !== "mock") {
     throw new BridgeError("CONFIG_ERROR", `serial.mode must be real or mock: ${mode}`);
   }
+  const transport = stringValue(raw.device?.transport, "serial");
+  if (transport !== "serial" && transport !== "wifi") {
+    throw new BridgeError("CONFIG_ERROR", `device.transport must be serial or wifi: ${transport}`);
+  }
 
   const config: BridgeConfig = {
     server: {
       host: stringValue(raw.server?.host, "127.0.0.1"),
       port: numberValue(raw.server?.port, 8787, "server.port"),
+    },
+    device: {
+      transport: transport as DeviceTransportKind,
     },
     serial: {
       mode: mode as SerialMode,
@@ -54,6 +70,12 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
         enabled: booleanValue(raw.serial?.reconnect?.enabled, true, "serial.reconnect.enabled"),
         intervalMs: numberValue(raw.serial?.reconnect?.interval_ms, 2000, "serial.reconnect.interval_ms"),
       },
+    },
+    wifi: {
+      baseUrl: normalizeBaseUrl(stringValue(raw.wifi?.base_url, "http://192.168.0.123")),
+      token: optionalStringValue(raw.wifi?.token, "wifi.token"),
+      timeoutMs: numberValue(raw.wifi?.timeout_ms, 5000, "wifi.timeout_ms"),
+      healthCheckIntervalMs: numberValue(raw.wifi?.health_check_interval_ms, 5000, "wifi.health_check_interval_ms"),
     },
     safety: {
       minX: numberValue(raw.safety?.min_x, -300, "safety.min_x"),
@@ -82,6 +104,16 @@ function stringValue(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function optionalStringValue(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new BridgeError("CONFIG_ERROR", `${field} must be a string`);
+  }
+  return value.length > 0 ? value : undefined;
+}
+
 function numberValue(value: unknown, fallback: number, field: string): number {
   if (value === undefined) {
     return fallback;
@@ -100,4 +132,8 @@ function booleanValue(value: unknown, fallback: boolean, field: string): boolean
     throw new BridgeError("CONFIG_ERROR", `${field} must be a boolean`);
   }
   return value;
+}
+
+function normalizeBaseUrl(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
 }
