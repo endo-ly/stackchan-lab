@@ -113,6 +113,8 @@ HTTP API on StackChan:
 - `GET /audio/status`
 - `POST /audio/volume`
 - `POST /audio/stop`
+- `GET /mic/status`
+- `POST /mic/record`
 - `GET /events`
 - `GET /events/latest`
 - `POST /events/clear`
@@ -378,7 +380,7 @@ OK EVENTS LATEST none
 OK EVENTS CLEAR
 OK WIFI STATUS connected=false ssid= ip= hostname=stackchan-001 rssi=0 auth=false
 OK RESET
-OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI,DEVICE expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR device=DEVICE:CONFIG_JSON
 ```
 
 ## Wi-Fi Setup Over USB Serial
@@ -410,6 +412,12 @@ openssl rand -hex 32
 
 tokenを再生成する場合は、新しいtokenを作って `npm run wifi:setup -- config.yaml` を再実行する。
 その後、Bridge側のローカル `config.yaml` の `wifi.token` も同じ値へ更新する。
+
+speech-services URLなどの運用設定は、Wi-Fi設定とは別に送る。
+
+```bash
+npm run device:config -- config.yaml
+```
 
 設定を消す場合:
 
@@ -455,3 +463,77 @@ curl "http://$STACKCHAN_IP/events" -H "X-StackChan-Token: $TOKEN"
 - Bridgeの `/play-wav` 経由でWAV再生中に口が動く
 - 画面タップ後に `EVENTS` で `touch screen tap` と `x` / `y` が返る
 - 本体を軽く動かした後に `EVENTS` で `imu device moved` または `shake` が返る
+
+## Phase 9.5 Microphone
+
+Phase 9.5 moves audio input toward the StackChan body microphone.
+
+Implemented in this step:
+
+- microphone initialization through M5Unified
+- short 16kHz mono 16-bit recording
+- in-memory WAV generation
+- upload to configured `speech-services`
+- HTTP status and record endpoints
+
+Not implemented in this step:
+
+- wake word detection
+
+Microphone status:
+
+```bash
+curl -H "X-StackChan-Token: <token>" \
+  http://<stackchan-ip>/mic/status
+```
+
+`POST /mic/record` records a short WAV, sends it to the configured `speechServicesUrl`, and returns the STT response.
+
+Copy-paste friendly test:
+
+```bash
+export STACKCHAN_IP="<stackchan-ip>"
+export TOKEN="<token>"
+
+curl -H "X-StackChan-Token: $TOKEN" \
+  "http://$STACKCHAN_IP/mic/status"
+
+curl -X POST "http://$STACKCHAN_IP/mic/record" \
+  -H "X-StackChan-Token: $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"durationMs":3000,"source":"stackchan"}'
+```
+
+Expected rough recording sizes for 3 seconds:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "recorded": true,
+    "uploaded": true,
+    "durationMs": 3000,
+    "pcmBytes": 96000,
+    "wavBytes": 96044,
+    "httpStatus": 200
+  }
+}
+```
+
+The recorded WAV is kept in StackChan RAM while it is uploaded. It is not saved as a file on the PC, SD, or flash storage.
+
+`speechServicesUrl` is stored by the device config CLI. The CLI reads Bridge `config.yaml` `stt.transcribe_url`. Re-run device config when changing the STT service endpoint.
+
+```bash
+cd /root/workspace/stackchan-lab/bridge
+npm run device:config -- config.yaml
+```
+
+When `speech-services` has a Bridge callback configured, this same `/mic/record` flow also creates a Bridge STT event:
+
+```bash
+curl "http://127.0.0.1:8787/stt/latest"
+curl "http://127.0.0.1:8787/events"
+```
+
+Wake word is not implemented in this step. It should use a real on-device wake word engine such as ESP-SR WakeNet or microWakeWord, not a volume threshold.

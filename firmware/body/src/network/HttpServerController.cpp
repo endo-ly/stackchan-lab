@@ -1,6 +1,8 @@
 #include "network/HttpServerController.hpp"
 
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFiClient.h>
 
 #include "protocol/ProtocolTypes.hpp"
 
@@ -65,6 +67,60 @@ void addEvent(JsonArray array, const InputEvent& event)
     }
 }
 
+bool postMultipartWav(const String& url, const String& source, const uint8_t* wav, size_t wavSize, int& statusCode, String& response, String& error)
+{
+    if (wav == nullptr || wavSize == 0) {
+        error = "MIC_WAV_EMPTY";
+        return false;
+    }
+
+    const String boundary = "----stackchan-mic-boundary";
+    const String part1 = String("--") + boundary + "\r\n"
+        + "Content-Disposition: form-data; name=\"source\"\r\n\r\n"
+        + source + "\r\n"
+        + "--" + boundary + "\r\n"
+        + "Content-Disposition: form-data; name=\"file\"; filename=\"stackchan.wav\"\r\n"
+        + "Content-Type: audio/wav\r\n\r\n";
+    const String part2 = String("\r\n--") + boundary + "--\r\n";
+    const size_t bodySize = part1.length() + wavSize + part2.length();
+    uint8_t* body = static_cast<uint8_t*>(ps_malloc(bodySize));
+    if (body == nullptr) {
+        body = static_cast<uint8_t*>(malloc(bodySize));
+    }
+    if (body == nullptr) {
+        error = "MIC_UPLOAD_BUFFER_ALLOC_FAILED";
+        return false;
+    }
+
+    size_t offset = 0;
+    memcpy(body + offset, part1.c_str(), part1.length());
+    offset += part1.length();
+    memcpy(body + offset, wav, wavSize);
+    offset += wavSize;
+    memcpy(body + offset, part2.c_str(), part2.length());
+
+    WiFiClient client;
+    HTTPClient http;
+    if (!http.begin(client, url)) {
+        free(body);
+        error = "MIC_UPLOAD_BEGIN_FAILED";
+        return false;
+    }
+
+    http.setTimeout(45000);
+    http.addHeader("Content-Type", String("multipart/form-data; boundary=") + boundary);
+    statusCode = http.POST(body, bodySize);
+    response = http.getString();
+    http.end();
+    free(body);
+
+    if (statusCode < 200 || statusCode >= 300) {
+        error = String("MIC_UPLOAD_HTTP_") + statusCode;
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 HttpServerController::HttpServerController(BodyController& body, WiFiManager& wifi, DeviceAuth& auth)
@@ -115,6 +171,8 @@ void HttpServerController::registerRoutes()
     server_.on("/audio/status", HTTP_GET, [this]() { handleAudioStatus(); });
     server_.on("/audio/volume", HTTP_POST, [this]() { handleAudioVolume(); });
     server_.on("/audio/stop", HTTP_POST, [this]() { handleAudioStop(); });
+    server_.on("/mic/status", HTTP_GET, [this]() { handleMicStatus(); });
+    server_.on("/mic/record", HTTP_POST, [this]() { handleMicRecord(); });
     server_.on("/events", HTTP_GET, [this]() { handleEvents(); });
     server_.on("/events/latest", HTTP_GET, [this]() { handleLatestEvent(); });
     server_.on("/events/clear", HTTP_POST, [this]() { handleClearEvents(); });
@@ -293,6 +351,57 @@ void HttpServerController::handleAudioStop()
     if (!requireAuth()) return;
     body_.stopAudio();
     sendOk("{\"stopped\":true}");
+}
+
+void HttpServerController::handleMicStatus()
+{
+    if (!requireAuth()) return;
+    const MicState& mic = body_.getMicState();
+    JsonDocument doc;
+    doc["available"] = mic.available();
+    doc["recording"] = mic.recording();
+    doc["sampleRate"] = mic.sampleRate();
+    doc["channels"] = mic.channels();
+    doc["lastRecordMs"] = mic.lastRecordMs();
+    doc["lastPcmBytes"] = mic.lastPcmBytes();
+    doc["lastWavBytes"] = mic.lastWavBytes();
+    doc["lastError"] = mic.lastError();
+    doc["speechServicesConfigured"] = wifi_.config().speechServicesUrl.length() > 0;
+    String data;
+    serializeJson(doc, data);
+    sendOk(data);
+}
+
+void HttpServerController::handleMicRecord()
+{
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, readBody())) return sendError(400, "INVALID_ARGUMENT", "Invalid JSON");
+    const uint32_t durationMs = doc["durationMs"] | 3000;
+    const String source = doc["source"] | "stackchan";
+    const String url = wifi_.config().speechServicesUrl;
+    if (url.length() == 0) return sendError(400, "SPEECH_SERVICES_NOT_CONFIGURED", "speechServicesUrl is not configured");
+
+    String error;
+    if (!body_.recordMicWav(durationMs, error)) return sendError(400, error.c_str(), error);
+
+    int statusCode = 0;
+    String response;
+    const bool uploaded = postMultipartWav(url, source, body_.micWavBuffer(), body_.micWavSize(), statusCode, response, error);
+    if (!uploaded) return sendError(502, error.c_str(), response.length() > 0 ? response : error);
+
+    JsonDocument result;
+    const MicState& mic = body_.getMicState();
+    result["recorded"] = true;
+    result["uploaded"] = true;
+    result["durationMs"] = mic.lastRecordMs();
+    result["pcmBytes"] = mic.lastPcmBytes();
+    result["wavBytes"] = mic.lastWavBytes();
+    result["httpStatus"] = statusCode;
+    result["speechResponse"] = response;
+    String data;
+    serializeJson(result, data);
+    sendOk(data);
 }
 
 void HttpServerController::handleEvents()

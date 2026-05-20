@@ -17,6 +17,7 @@ public:
     uint8_t* wavReceiveBuffer();
     String completeWavTransfer(size_t size);
     String completeWifiJsonTransfer(const String& json);
+    String completeDeviceConfigJsonTransfer(const String& json);
 
 private:
     String handleAudio(const ParsedCommand& command);
@@ -33,6 +34,8 @@ private:
     String handleWifiSetJson(const ParsedCommand& command);
     String handleWifiConnect(const ParsedCommand& command);
     String handleWifiClear(const ParsedCommand& command);
+    String handleDevice(const ParsedCommand& command);
+    String handleDeviceConfigJson(const ParsedCommand& command);
 
     String handleFace(const ParsedCommand& command);
     String handleLed(const ParsedCommand& command);

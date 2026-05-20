@@ -36,6 +36,31 @@ void SerialProtocol::processLine(const String& line)
     writeResponse(response);
     maybeReceiveWav(response);
     maybeReceiveWifiJson(response);
+    maybeReceiveDeviceConfigJson(response);
+}
+
+bool SerialProtocol::maybeReceiveDeviceConfigJson(const String& response)
+{
+    size_t size = 0;
+    if (!parseReadyDeviceConfigJsonSize(response, size)) {
+        return false;
+    }
+    String json;
+    json.reserve(size);
+    const uint32_t startedAt = millis();
+    while (json.length() < size) {
+        if (Serial.available() > 0) {
+            json += static_cast<char>(Serial.read());
+            continue;
+        }
+        if (millis() - startedAt > 5000) {
+            writeResponse("ERR DEVICE_CONFIG_JSON_RECEIVE_TIMEOUT");
+            return false;
+        }
+        delay(1);
+    }
+    writeResponse(handler_.completeDeviceConfigJsonTransfer(json));
+    return true;
 }
 
 bool SerialProtocol::maybeReceiveWav(const String& response)
@@ -115,6 +140,20 @@ bool SerialProtocol::parseReadyWifiJsonSize(const String& response, size_t& size
         return false;
     }
     const String value = response.substring(String("READY WIFI JSON size=").length());
+    const int parsed = value.toInt();
+    if (parsed <= 0) {
+        return false;
+    }
+    size = static_cast<size_t>(parsed);
+    return true;
+}
+
+bool SerialProtocol::parseReadyDeviceConfigJsonSize(const String& response, size_t& size) const
+{
+    if (!response.startsWith("READY DEVICE CONFIG JSON size=")) {
+        return false;
+    }
+    const String value = response.substring(String("READY DEVICE CONFIG JSON size=").length());
     const int parsed = value.toInt();
     if (parsed <= 0) {
         return false;

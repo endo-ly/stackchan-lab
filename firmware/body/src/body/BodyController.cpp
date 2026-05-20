@@ -19,6 +19,7 @@ void BodyController::begin()
     display_.begin();
     display_.showBoot();
     audio_.begin();
+    mic_.begin();
     input_.begin();
     led_.begin();
     motion_.begin(state_);
@@ -127,6 +128,15 @@ bool BodyController::setAudioVolume(int volume)
     return audio_.setVolume(volume);
 }
 
+bool BodyController::recordMicWav(uint32_t durationMs, String& error)
+{
+    stopAudio();
+    led_.setMood(Mood::Active);
+    const bool ok = mic_.recordWav(durationMs, error);
+    led_.setMood(state_.mood());
+    return ok;
+}
+
 const BodyState& BodyController::getState() const
 {
     return state_;
@@ -140,6 +150,21 @@ const FaceState& BodyController::getFaceState() const
 const AudioState& BodyController::getAudioState() const
 {
     return audio_.getState();
+}
+
+const MicState& BodyController::getMicState() const
+{
+    return mic_.getState();
+}
+
+const uint8_t* BodyController::micWavBuffer() const
+{
+    return mic_.wavBuffer();
+}
+
+size_t BodyController::micWavSize() const
+{
+    return mic_.wavSize();
 }
 
 InputController& BodyController::input()

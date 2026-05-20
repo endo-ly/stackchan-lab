@@ -65,7 +65,7 @@ Returns the supported command list and supported FACE/LED/POSE values.
 
 ```text
 HELP
-OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR
+OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI,DEVICE expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR device=DEVICE:CONFIG_JSON
 ```
 
 ### STATUS
@@ -377,6 +377,28 @@ ERR WIFI_JSON_INVALID
 ERR WIFI_CONFIG_SAVE_FAILED
 ERR WIFI_CONNECT_FAILED
 ERR WIFI_JSON_RECEIVE_TIMEOUT
+```
+
+### DEVICE
+
+Updates runtime device configuration over USB Serial. This is separate from Wi-Fi credentials.
+
+#### DEVICE:CONFIG_JSON
+
+Starts a JSON device configuration transfer. Normal users should use the Bridge `device:config` CLI instead of sending this manually.
+
+The CLI sends `DEVICE:CONFIG_JSON:<size>`, waits for `READY DEVICE CONFIG JSON`, then writes the JSON payload bytes.
+
+JSON fields:
+
+- `speechServicesUrl`
+
+Errors:
+
+```text
+ERR DEVICE_CONFIG_JSON_INVALID
+ERR DEVICE_CONFIG_SAVE_FAILED
+ERR DEVICE_CONFIG_JSON_RECEIVE_TIMEOUT
 ```
 
 #### WIFI:CONNECT

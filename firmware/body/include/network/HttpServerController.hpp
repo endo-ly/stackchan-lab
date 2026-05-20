@@ -37,6 +37,8 @@ private:
     void handleAudioStatus();
     void handleAudioVolume();
     void handleAudioStop();
+    void handleMicStatus();
+    void handleMicRecord();
     void handleEvents();
     void handleLatestEvent();
     void handleClearEvents();

@@ -78,6 +78,9 @@ CommandType CommandParser::parseCommandType(const String& commandName) const
     if (commandName == "WIFI") {
         return CommandType::Wifi;
     }
+    if (commandName == "DEVICE") {
+        return CommandType::Device;
+    }
 
     return CommandType::Unknown;
 }

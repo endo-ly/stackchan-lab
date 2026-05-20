@@ -12,6 +12,7 @@ struct WiFiConfig {
     String password;
     String hostname = "stackchan-001";
     String authToken;
+    String speechServicesUrl;
 };
 
 class WiFiManager {
@@ -19,6 +20,7 @@ public:
     void begin();
     bool loadConfig(WiFiConfig& config);
     bool saveConfig(const WiFiConfig& config);
+    bool saveSpeechServicesUrl(const String& url);
     bool clearConfig();
     bool connectSaved(uint32_t timeoutMs = 15000);
     bool connect(const WiFiConfig& config, uint32_t timeoutMs = 15000);

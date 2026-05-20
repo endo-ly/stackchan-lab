@@ -10,6 +10,7 @@ constexpr const char* kSsidKey = "ssid";
 constexpr const char* kPasswordKey = "password";
 constexpr const char* kHostnameKey = "hostname";
 constexpr const char* kAuthTokenKey = "auth_token";
+constexpr const char* kSpeechServicesUrlKey = "speech_url";
 
 }  // namespace
 
@@ -29,6 +30,7 @@ bool WiFiManager::loadConfig(WiFiConfig& config)
     config.password = preferences_.getString(kPasswordKey, "");
     config.hostname = preferences_.getString(kHostnameKey, "stackchan-001");
     config.authToken = preferences_.getString(kAuthTokenKey, "");
+    config.speechServicesUrl = preferences_.getString(kSpeechServicesUrlKey, "");
     preferences_.end();
     return config.ssid.length() > 0;
 }
@@ -43,15 +45,39 @@ bool WiFiManager::saveConfig(const WiFiConfig& config)
         state_.lastError = "preferences_open_failed";
         return false;
     }
+    const String existingSpeechServicesUrl = preferences_.getString(kSpeechServicesUrlKey, "");
     const bool ok = preferences_.putString(kSsidKey, config.ssid) > 0
         && preferences_.putString(kPasswordKey, config.password) == config.password.length()
         && preferences_.putString(kHostnameKey, config.hostname) > 0
-        && preferences_.putString(kAuthTokenKey, config.authToken) == config.authToken.length();
+        && preferences_.putString(kAuthTokenKey, config.authToken) == config.authToken.length()
+        && preferences_.putString(kSpeechServicesUrlKey, existingSpeechServicesUrl) == existingSpeechServicesUrl.length();
     preferences_.end();
     if (ok) {
         config_ = config;
+        config_.speechServicesUrl = existingSpeechServicesUrl;
         state_.hostname = config.hostname;
         state_.authEnabled = config.authToken.length() > 0;
+        state_.lastError = "";
+    } else {
+        state_.lastError = "save_failed";
+    }
+    return ok;
+}
+
+bool WiFiManager::saveSpeechServicesUrl(const String& url)
+{
+    if (url.length() == 0) {
+        state_.lastError = "invalid_speech_services_url";
+        return false;
+    }
+    if (!preferences_.begin(kNamespace, false)) {
+        state_.lastError = "preferences_open_failed";
+        return false;
+    }
+    const bool ok = preferences_.putString(kSpeechServicesUrlKey, url) == url.length();
+    preferences_.end();
+    if (ok) {
+        config_.speechServicesUrl = url;
         state_.lastError = "";
     } else {
         state_.lastError = "save_failed";

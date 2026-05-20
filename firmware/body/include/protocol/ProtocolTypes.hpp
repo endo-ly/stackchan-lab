@@ -23,6 +23,7 @@ enum class CommandType {
     Audio,
     Events,
     Wifi,
+    Device,
     Unknown,
 };
 

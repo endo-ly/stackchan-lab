@@ -43,7 +43,7 @@ String CommandHandler::handle(const ParsedCommand& command)
                 + " board=" + kBoardName;
         case CommandType::Help:
             return hasNoArgs(command)
-                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR"
+                ? "OK HELP commands=PING,VERSION,HELP,STATUS,FACE,LED,POSE,MOVE,RESET,AUDIO,EVENTS,WIFI,DEVICE expressions=neutral,happy,sad,angry,sleepy,doubt moods=calm,active,speaking,warning,off poses=neutral,look_left,look_right,look_up,look_down audio=AUDIO:STATUS,AUDIO:VOLUME,AUDIO:STOP,AUDIO:WAV events=EVENTS,EVENTS:LATEST,EVENTS:CLEAR wifi=WIFI:STATUS,WIFI:SET_JSON,WIFI:CONNECT,WIFI:CLEAR device=DEVICE:CONFIG_JSON"
                 : tooManyArguments(command);
         case CommandType::Status:
             return handleStatus(command);
@@ -63,11 +63,39 @@ String CommandHandler::handle(const ParsedCommand& command)
             return handleEvents(command);
         case CommandType::Wifi:
             return handleWifi(command);
+        case CommandType::Device:
+            return handleDevice(command);
         case CommandType::Unknown:
             return String("ERR ") + toString(ProtocolError::UnknownCommand) + " command=" + command.name;
     }
 
     return String("ERR ") + toString(ProtocolError::InternalError);
+}
+
+String CommandHandler::handleDevice(const ParsedCommand& command)
+{
+    if (network_ == nullptr) {
+        return "ERR NETWORK_NOT_CONFIGURED";
+    }
+    if (command.argCount == 0) {
+        return missingArgument("device_command");
+    }
+    const String action = normalized(command.args[0]);
+    if (action == "config_json") return handleDeviceConfigJson(command);
+    return invalidArgument("device_command", command.args[0]);
+}
+
+String CommandHandler::handleDeviceConfigJson(const ParsedCommand& command)
+{
+    if (command.argCount < 2) return missingArgument("size");
+    if (command.argCount > 2) return tooManyArguments(command);
+    size_t size = 0;
+    if (!parseSize(command.args[1], size) || size == 0 || size > 1024) {
+        return invalidArgument("size", command.args[1]);
+    }
+    String response = "READY DEVICE CONFIG JSON size=";
+    response += size;
+    return response;
 }
 
 String CommandHandler::handleWifi(const ParsedCommand& command)
@@ -157,6 +185,25 @@ String CommandHandler::completeWifiJsonTransfer(const String& json)
         return "ERR WIFI_CONNECT_FAILED";
     }
     return String("OK WIFI SET ssid=") + config.ssid + " hostname=" + config.hostname;
+}
+
+String CommandHandler::completeDeviceConfigJsonTransfer(const String& json)
+{
+    if (network_ == nullptr) {
+        return "ERR NETWORK_NOT_CONFIGURED";
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, json)) {
+        return "ERR DEVICE_CONFIG_JSON_INVALID";
+    }
+    const String speechServicesUrl = doc["speechServicesUrl"] | "";
+    if (speechServicesUrl.length() == 0) {
+        return "ERR DEVICE_CONFIG_JSON_INVALID";
+    }
+    if (!network_->wifi().saveSpeechServicesUrl(speechServicesUrl)) {
+        return "ERR DEVICE_CONFIG_SAVE_FAILED";
+    }
+    return "OK DEVICE CONFIG";
 }
 
 String CommandHandler::handleEvents(const ParsedCommand& command)
