@@ -1,3 +1,4 @@
+import type { BridgeInputEvent, LatestTranscription, TranscriptionResult } from "../stt/SttTypes.js";
 import type { BodyStatus, DeviceVersion, InputEvent, ReceivedInputEvent } from "../types/body.js";
 
 export class BridgeState {
@@ -23,6 +24,11 @@ export class BridgeState {
   private lastCommandAt?: string;
   private lastResponseAt?: string;
   private lastError?: string;
+  private sttEnabled = false;
+  private sttReachable = false;
+  private latestTranscription?: LatestTranscription;
+  private bridgeEventCount = 0;
+  private latestBridgeEvent?: BridgeInputEvent;
 
   markCommand(): void {
     this.lastCommandAt = new Date().toISOString();
@@ -99,6 +105,33 @@ export class BridgeState {
     this.latestEvent = undefined;
   }
 
+  updateSttHealth(enabled: boolean, reachable: boolean): void {
+    this.sttEnabled = enabled;
+    this.sttReachable = reachable;
+  }
+
+  updateTranscription(result: TranscriptionResult, timestamp: string): LatestTranscription {
+    this.latestTranscription = {
+      ...result,
+      timestamp,
+    };
+    return this.latestTranscription;
+  }
+
+  getLatestTranscription(): LatestTranscription | null {
+    return this.latestTranscription ?? null;
+  }
+
+  updateBridgeEvents(events: BridgeInputEvent[]): void {
+    this.bridgeEventCount = events.length;
+    this.latestBridgeEvent = events.at(-1);
+  }
+
+  clearBridgeEvents(): void {
+    this.bridgeEventCount = 0;
+    this.latestBridgeEvent = undefined;
+  }
+
   getVersion(): DeviceVersion {
     if (!this.connected) {
       return { connected: false };
@@ -111,7 +144,14 @@ export class BridgeState {
     };
   }
 
-  getStatus(): BodyStatus & { lastError?: string } {
+  getStatus(): BodyStatus & {
+    lastError?: string;
+    sttEnabled: boolean;
+    sttReachable: boolean;
+    latestTranscription?: LatestTranscription;
+    bridgeEventCount: number;
+    latestBridgeEvent?: BridgeInputEvent;
+  } {
     return {
       connected: this.connected,
       mode: this.mode,
@@ -134,6 +174,11 @@ export class BridgeState {
       lastCommandAt: this.lastCommandAt,
       lastResponseAt: this.lastResponseAt,
       lastError: this.lastError,
+      sttEnabled: this.sttEnabled,
+      sttReachable: this.sttReachable,
+      latestTranscription: this.latestTranscription,
+      bridgeEventCount: this.bridgeEventCount,
+      latestBridgeEvent: this.latestBridgeEvent,
     };
   }
 }

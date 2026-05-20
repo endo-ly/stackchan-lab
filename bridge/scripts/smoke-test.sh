@@ -45,6 +45,7 @@ request GET /status
 request GET /audio/status
 request GET /events
 request GET /events/latest
+request GET /stt/health
 request POST /face '{"expression":"happy"}'
 request POST /face '{"expression":"doubt"}'
 expect_status 400 POST /face '{"expression":"thinking"}'
@@ -61,4 +62,11 @@ request GET /audio/status
 request POST /audio/stop
 request POST /events/clear
 request GET /events
+
+if [[ -n "${STACKCHAN_STT_SAMPLE_WAV:-}" ]]; then
+  curl -fsS -X POST "$BASE_URL/stt/transcribe-file" \
+    -F "file=@$STACKCHAN_STT_SAMPLE_WAV" | jq .
+  request GET /stt/latest
+fi
+
 request POST /reset

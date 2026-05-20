@@ -10,6 +10,9 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
   server.get("/audio/status", async () => success(await bridge.getAudioStatus()));
   server.get("/events", async () => success(await bridge.getEvents()));
   server.get("/events/latest", async () => success(await bridge.getLatestEvent()));
+  server.get("/stt/health", async () => success(await bridge.getSttHealth()));
+  server.get("/stt/capabilities", async () => success(await bridge.getSttCapabilities()));
+  server.get("/stt/latest", async () => success(bridge.getLatestTranscription()));
   server.get("/presets", async () => success(bridge.getPresets()));
 
   server.post("/face", async (request) => {
@@ -54,6 +57,14 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
       throw new BridgeError("INVALID_REQUEST", "multipart file field is required");
     }
     return success(await bridge.playWav(await file.toBuffer()));
+  });
+
+  server.post("/stt/transcribe-file", async (request) => {
+    const file = await request.file();
+    if (!file) {
+      throw new BridgeError("INVALID_REQUEST", "multipart file field is required");
+    }
+    return success(await bridge.transcribeFile(await file.toBuffer(), file.filename));
   });
 
   server.setErrorHandler((error: Error, _request, reply) => {
@@ -118,14 +129,17 @@ function statusFor(code: string): number {
     case "AUDIO_TOO_LARGE":
     case "AUDIO_INVALID_FORMAT":
     case "UNSUPPORTED_PRESET":
+    case "STT_DISABLED":
       return 400;
     case "STACKCHAN_NOT_CONNECTED":
     case "DEVICE_UNREACHABLE":
+    case "STT_SERVICE_UNREACHABLE":
       return 503;
     case "STACKCHAN_TIMEOUT":
     case "DEVICE_TIMEOUT":
     case "EVENTS_TIMEOUT":
     case "AUDIO_RECEIVE_TIMEOUT":
+    case "STT_TIMEOUT":
       return 504;
     case "DEVICE_UNAUTHORIZED":
       return 502;
@@ -138,6 +152,7 @@ function statusFor(code: string): number {
     case "PRESET_APPLY_FAILED":
     case "EVENT_QUEUE_ERROR":
     case "UNSUPPORTED_INPUT":
+    case "STT_ERROR":
       return 500;
     default:
       return 500;

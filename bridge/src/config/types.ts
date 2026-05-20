@@ -27,6 +27,16 @@ export type BridgeConfig = {
     };
   };
   wifi: WifiConfig;
+  stt: {
+    enabled: boolean;
+    baseUrl: string;
+    timeoutMs: number;
+    emitEvent: boolean;
+    maxFileSizeMb: number;
+  };
+  events: {
+    includeBridgeEvents: boolean;
+  };
   safety: {
     minX: number;
     maxX: number;

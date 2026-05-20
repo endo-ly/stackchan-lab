@@ -1,19 +1,27 @@
 import { BridgeError } from "./BridgeError.js";
 import { BridgeState } from "./BridgeState.js";
+import { BridgeEventStore } from "../events/BridgeEventStore.js";
 import { bodyPresets } from "./presets.js";
 import { clampMove } from "./safety.js";
 import { validateWav } from "./wav.js";
 import type { BridgeConfig } from "../config/types.js";
+import { SttClient } from "../stt/SttClient.js";
+import { transcriptionToEvent } from "../stt/SttEventMapper.js";
+import type { BridgeInputEvent } from "../stt/SttTypes.js";
 import type { DeviceTransport } from "../transport/DeviceTransport.js";
 import { commands, expressions, moods, poses, presets, type Expression, type Mood, type Pose, type PresetName } from "../types/body.js";
 
 export class StackChanBridge {
   private readonly state = new BridgeState();
+  private readonly sttClient: SttClient;
+  private readonly bridgeEvents = new BridgeEventStore();
 
   constructor(
     private readonly config: BridgeConfig,
     private readonly transport: DeviceTransport,
-  ) {}
+  ) {
+    this.sttClient = new SttClient(config.stt);
+  }
 
   async start(): Promise<void> {
     try {
@@ -81,6 +89,37 @@ export class StackChanBridge {
     return { presets };
   }
 
+  async getSttHealth() {
+    const health = await this.sttClient.health();
+    this.state.updateSttHealth(health.enabled, health.reachable);
+    return health;
+  }
+
+  async getSttCapabilities() {
+    return await this.sttClient.capabilities();
+  }
+
+  async transcribeFile(data: Buffer, filename: string) {
+    const result = await this.sttClient.transcribeFile(data, filename);
+    const timestamp = new Date().toISOString();
+    const latest = this.state.updateTranscription(result, timestamp);
+    let event: BridgeInputEvent | undefined;
+    if (this.config.stt.emitEvent) {
+      event = this.bridgeEvents.addSttEvent((id) => transcriptionToEvent(id, result, timestamp));
+      this.state.updateBridgeEvents(this.bridgeEvents.list());
+    }
+    return {
+      ...latest,
+      event,
+    };
+  }
+
+  getLatestTranscription() {
+    return {
+      latest: this.state.getLatestTranscription(),
+    };
+  }
+
   async setFace(expression: string) {
     assertAllowed(expression, expressions, "expression");
     await this.runDeviceCommand(() => this.transport.setFace(expression as Expression));
@@ -143,19 +182,30 @@ export class StackChanBridge {
 
   async getEvents() {
     const result = await this.runDeviceCommand(() => this.transport.events());
+    const bridgeEvents = this.config.events.includeBridgeEvents ? this.bridgeEvents.list() : [];
     this.state.updateEvents(result.count, result.events);
-    return result;
+    this.state.updateBridgeEvents(bridgeEvents);
+    const events = [...result.events.map((event) => ({ source: "device", ...event })), ...bridgeEvents];
+    return {
+      count: events.length,
+      deviceCount: result.count,
+      bridgeCount: bridgeEvents.length,
+      events,
+    };
   }
 
   async getLatestEvent() {
     const event = await this.runDeviceCommand(() => this.transport.latestEvent());
     this.state.updateLatestEvent(event);
-    return { event };
+    const bridgeEvent = this.config.events.includeBridgeEvents ? this.bridgeEvents.latest() : null;
+    return { event: bridgeEvent ?? event };
   }
 
   async clearEvents() {
     await this.runDeviceCommand(() => this.transport.clearEvents());
     this.state.clearEvents();
+    this.bridgeEvents.clear();
+    this.state.clearBridgeEvents();
     return { cleared: true };
   }
 

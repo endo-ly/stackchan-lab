@@ -22,6 +22,10 @@ export type BridgeErrorCode =
   | "AUDIO_RECEIVE_TIMEOUT"
   | "UNSUPPORTED_PRESET"
   | "PRESET_APPLY_FAILED"
+  | "STT_DISABLED"
+  | "STT_SERVICE_UNREACHABLE"
+  | "STT_TIMEOUT"
+  | "STT_ERROR"
   | "INTERNAL_ERROR";
 
 export class BridgeError extends Error {
