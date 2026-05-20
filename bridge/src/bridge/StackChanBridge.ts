@@ -5,22 +5,19 @@ import { bodyPresets } from "./presets.js";
 import { clampMove } from "./safety.js";
 import { validateWav } from "./wav.js";
 import type { BridgeConfig } from "../config/types.js";
-import { SttClient } from "../stt/SttClient.js";
 import { transcriptionToEvent } from "../stt/SttEventMapper.js";
-import type { BridgeInputEvent } from "../stt/SttTypes.js";
+import type { BridgeInputEvent, TranscriptionResult } from "../stt/SttTypes.js";
 import type { DeviceTransport } from "../transport/DeviceTransport.js";
 import { commands, expressions, moods, poses, presets, type Expression, type Mood, type Pose, type PresetName } from "../types/body.js";
 
 export class StackChanBridge {
   private readonly state = new BridgeState();
-  private readonly sttClient: SttClient;
   private readonly bridgeEvents = new BridgeEventStore();
 
   constructor(
     private readonly config: BridgeConfig,
     private readonly transport: DeviceTransport,
   ) {
-    this.sttClient = new SttClient(config.stt);
   }
 
   async start(): Promise<void> {
@@ -89,25 +86,11 @@ export class StackChanBridge {
     return { presets };
   }
 
-  async getSttHealth() {
-    const health = await this.sttClient.health();
-    this.state.updateSttHealth(health.enabled, health.reachable);
-    return health;
-  }
-
-  async getSttCapabilities() {
-    return await this.sttClient.capabilities();
-  }
-
-  async transcribeFile(data: Buffer, filename: string) {
-    const result = await this.sttClient.transcribeFile(data, filename);
+  receiveSttEvent(result: TranscriptionResult) {
     const timestamp = new Date().toISOString();
     const latest = this.state.updateTranscription(result, timestamp);
-    let event: BridgeInputEvent | undefined;
-    if (this.config.stt.emitEvent) {
-      event = this.bridgeEvents.addSttEvent((id) => transcriptionToEvent(id, result, timestamp));
-      this.state.updateBridgeEvents(this.bridgeEvents.list());
-    }
+    const event = this.bridgeEvents.addSttEvent((id) => transcriptionToEvent(id, result, timestamp));
+    this.state.updateBridgeEvents(this.bridgeEvents.list());
     return {
       ...latest,
       event,

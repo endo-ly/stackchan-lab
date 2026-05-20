@@ -30,11 +30,7 @@ type RawConfig = {
     health_check_interval_ms?: unknown;
   };
   stt?: {
-    enabled?: unknown;
-    base_url?: unknown;
-    timeout_ms?: unknown;
-    emit_event?: unknown;
-    max_file_size_mb?: unknown;
+    transcribe_url?: unknown;
   };
   events?: {
     include_bridge_events?: unknown;
@@ -88,11 +84,7 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
       healthCheckIntervalMs: numberValue(raw.wifi?.health_check_interval_ms, 5000, "wifi.health_check_interval_ms"),
     },
     stt: {
-      enabled: booleanValue(raw.stt?.enabled, false, "stt.enabled"),
-      baseUrl: normalizeBaseUrl(stringValue(raw.stt?.base_url, "http://127.0.0.1:8790")),
-      timeoutMs: numberValue(raw.stt?.timeout_ms, 30000, "stt.timeout_ms"),
-      emitEvent: booleanValue(raw.stt?.emit_event, true, "stt.emit_event"),
-      maxFileSizeMb: numberValue(raw.stt?.max_file_size_mb, 20, "stt.max_file_size_mb"),
+      transcribeUrl: stringValue(raw.stt?.transcribe_url, "http://127.0.0.1:8790/transcribe"),
     },
     events: {
       includeBridgeEvents: booleanValue(raw.events?.include_bridge_events, true, "events.include_bridge_events"),

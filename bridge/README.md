@@ -74,17 +74,13 @@ STT configuration:
 
 ```yaml
 stt:
-  enabled: true
-  base_url: "http://127.0.0.1:8790"
-  timeout_ms: 30000
-  emit_event: true
-  max_file_size_mb: 20
+  transcribe_url: "http://<speech-services-lan-ip>:8790/transcribe"
 
 events:
   include_bridge_events: true
 ```
 
-`speech-services` is a separate Python service. The bridge only calls it over HTTP.
+`speech-services` is a separate Python service. Audio sources send audio to `speech-services`; the bridge receives completed STT events.
 
 `config.yaml` is ignored by git because it is local machine configuration.
 
@@ -232,6 +228,19 @@ openssl rand -hex 32
 ```
 
 The password and token are sent directly to StackChan over USB Serial and are not written to the repository.
+
+Device runtime config is updated separately:
+
+```bash
+npm run device:config -- config.yaml
+```
+
+`device:config` sends `stt.transcribe_url` to StackChan over USB Serial. This is used by the body microphone recorder.
+
+```yaml
+stt:
+  transcribe_url: "http://<speech-services-lan-ip>:8790/transcribe"
+```
 
 To regenerate the token later:
 
@@ -426,29 +435,27 @@ curl -X POST http://127.0.0.1:8787/play-wav \
   -F "file=@test-assets/sample.wav"
 ```
 
-### GET /stt/health
+### POST /stt/events
 
-Check whether the external STT service is enabled and reachable.
-
-```bash
-curl http://127.0.0.1:8787/stt/health
-```
-
-### GET /stt/capabilities
-
-Get STT provider capabilities from `speech-services`.
+Receive a completed transcription event from `speech-services`. The bridge stores it as the latest STT result and exposes it through `/events`.
 
 ```bash
-curl http://127.0.0.1:8787/stt/capabilities
-```
-
-### POST /stt/transcribe-file
-
-Send a WAV file to `speech-services` through the bridge. The result is stored as the latest transcription. When `stt.emit_event` is true, it is also added as a bridge-side input event.
-
-```bash
-curl -X POST http://127.0.0.1:8787/stt/transcribe-file \
-  -F "file=@sample.wav"
+curl -X POST http://127.0.0.1:8787/stt/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "stackchan",
+    "text": "こんにちは",
+    "language": "ja",
+    "durationSec": 3.2,
+    "processingMs": 820,
+    "provider": "reazonspeech_k2",
+    "model": "reazon-research/reazonspeech-k2-v2",
+    "audio": {
+      "sampleRate": 16000,
+      "channels": 1,
+      "format": "wav"
+    }
+  }'
 ```
 
 The response includes `processingMs` from `speech-services`.
@@ -463,7 +470,7 @@ curl http://127.0.0.1:8787/stt/latest
 
 ### GET /events
 
-Get the current input event queue. Firmware-side events are returned with `source: "device"`. STT events are bridge-side events with `source: "bridge"` when `events.include_bridge_events` is true. Reading events does not clear them.
+Get the current input event queue. Firmware-side events are returned with `source: "device"`. STT events keep their audio input source such as `source: "stackchan"` when `events.include_bridge_events` is true. Reading events does not clear them.
 
 ```bash
 curl http://127.0.0.1:8787/events
@@ -544,13 +551,22 @@ Not implemented:
 
 Implemented:
 
-- STT service client
-- `GET /stt/health`
-- `GET /stt/capabilities`
-- `POST /stt/transcribe-file`
 - `GET /stt/latest`
 - STT result as bridge-side input event
 - `/events` integration for bridge-side events
+
+## Phase 9.5 Scope
+
+Implemented:
+
+- removed bridge-side audio upload STT endpoint
+- `POST /stt/events`
+- latest STT event received from `speech-services`
+- `/events` integration for STT input events
+
+Removed:
+
+- `POST /stt/transcribe-file`
 
 Not implemented:
 

@@ -45,7 +45,6 @@ request GET /status
 request GET /audio/status
 request GET /events
 request GET /events/latest
-request GET /stt/health
 request POST /face '{"expression":"happy"}'
 request POST /face '{"expression":"doubt"}'
 expect_status 400 POST /face '{"expression":"thinking"}'
@@ -63,10 +62,20 @@ request POST /audio/stop
 request POST /events/clear
 request GET /events
 
-if [[ -n "${STACKCHAN_STT_SAMPLE_WAV:-}" ]]; then
-  curl -fsS -X POST "$BASE_URL/stt/transcribe-file" \
-    -F "file=@$STACKCHAN_STT_SAMPLE_WAV" | jq .
-  request GET /stt/latest
-fi
+request POST /stt/events '{
+  "source": "stackchan",
+  "text": "こんにちは",
+  "language": "ja",
+  "durationSec": 3.2,
+  "processingMs": 820,
+  "provider": "reazonspeech_k2",
+  "model": "reazon-research/reazonspeech-k2-v2",
+  "audio": {
+    "sampleRate": 16000,
+    "channels": 1,
+    "format": "wav"
+  }
+}'
+request GET /stt/latest
 
 request POST /reset

@@ -10,8 +10,6 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
   server.get("/audio/status", async () => success(await bridge.getAudioStatus()));
   server.get("/events", async () => success(await bridge.getEvents()));
   server.get("/events/latest", async () => success(await bridge.getLatestEvent()));
-  server.get("/stt/health", async () => success(await bridge.getSttHealth()));
-  server.get("/stt/capabilities", async () => success(await bridge.getSttCapabilities()));
   server.get("/stt/latest", async () => success(bridge.getLatestTranscription()));
   server.get("/presets", async () => success(bridge.getPresets()));
 
@@ -59,12 +57,20 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
     return success(await bridge.playWav(await file.toBuffer()));
   });
 
-  server.post("/stt/transcribe-file", async (request) => {
-    const file = await request.file();
-    if (!file) {
-      throw new BridgeError("INVALID_REQUEST", "multipart file field is required");
-    }
-    return success(await bridge.transcribeFile(await file.toBuffer(), file.filename));
+  server.post("/stt/events", async (request) => {
+    const body = requireObject(request.body);
+    return success(
+      bridge.receiveSttEvent({
+        source: requireString(body.source, "source"),
+        text: requireString(body.text, "text"),
+        language: requireString(body.language, "language"),
+        durationSec: requireNumber(body.durationSec, "durationSec"),
+        processingMs: requireNumber(body.processingMs, "processingMs"),
+        provider: requireString(body.provider, "provider"),
+        model: requireString(body.model, "model"),
+        audio: optionalAudio(body.audio),
+      }),
+    );
   });
 
   server.setErrorHandler((error: Error, _request, reply) => {
@@ -95,6 +101,38 @@ function requireNumber(value: unknown, field: string): number {
     throw new BridgeError("INVALID_ARGUMENT", `${field} must be a finite number`);
   }
   return value;
+}
+
+function optionalAudio(value: unknown):
+  | {
+      sampleRate?: number;
+      channels?: number;
+      format?: string;
+    }
+  | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const audio = requireObject(value);
+  return {
+    sampleRate: optionalNumber(audio.sampleRate, "audio.sampleRate"),
+    channels: optionalNumber(audio.channels, "audio.channels"),
+    format: optionalString(audio.format, "audio.format"),
+  };
+}
+
+function optionalNumber(value: unknown, field: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireNumber(value, field);
+}
+
+function optionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireString(value, field);
 }
 
 function sendError(reply: FastifyReply, error: Error): void {
@@ -129,17 +167,14 @@ function statusFor(code: string): number {
     case "AUDIO_TOO_LARGE":
     case "AUDIO_INVALID_FORMAT":
     case "UNSUPPORTED_PRESET":
-    case "STT_DISABLED":
       return 400;
     case "STACKCHAN_NOT_CONNECTED":
     case "DEVICE_UNREACHABLE":
-    case "STT_SERVICE_UNREACHABLE":
       return 503;
     case "STACKCHAN_TIMEOUT":
     case "DEVICE_TIMEOUT":
     case "EVENTS_TIMEOUT":
     case "AUDIO_RECEIVE_TIMEOUT":
-    case "STT_TIMEOUT":
       return 504;
     case "DEVICE_UNAUTHORIZED":
       return 502;
@@ -152,7 +187,6 @@ function statusFor(code: string): number {
     case "PRESET_APPLY_FAILED":
     case "EVENT_QUEUE_ERROR":
     case "UNSUPPORTED_INPUT":
-    case "STT_ERROR":
       return 500;
     default:
       return 500;

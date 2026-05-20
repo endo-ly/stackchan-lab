@@ -3,7 +3,7 @@ import type { BridgeInputEvent, TranscriptionResult } from "./SttTypes.js";
 export function transcriptionToEvent(id: number, result: TranscriptionResult, timestamp: string): BridgeInputEvent {
   return {
     id,
-    source: "bridge",
+    source: result.source,
     type: "stt",
     target: "audio",
     value: result.text,
@@ -14,6 +14,7 @@ export function transcriptionToEvent(id: number, result: TranscriptionResult, ti
       processingMs: result.processingMs,
       provider: result.provider,
       model: result.model,
+      audio: result.audio,
     },
   };
 }

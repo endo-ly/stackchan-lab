@@ -1,37 +1,20 @@
 export type SttConfig = {
-  enabled: boolean;
-  baseUrl: string;
-  timeoutMs: number;
-  emitEvent: boolean;
-  maxFileSizeMb: number;
-};
-
-export type SttHealth = {
-  enabled: boolean;
-  reachable: boolean;
-  service?: {
-    status?: string;
-    provider?: string;
-    modelLoaded?: boolean;
-  };
-};
-
-export type SttCapabilities = {
-  providers: string[];
-  activeProvider: string;
-  languages: string[];
-  inputFormats: string[];
-  maxAudioSeconds: number;
-  streaming: boolean;
+  transcribeUrl: string;
 };
 
 export type TranscriptionResult = {
+  source: string;
   text: string;
   language: string;
   durationSec: number;
   processingMs: number;
   provider: string;
   model: string;
+  audio?: {
+    sampleRate?: number;
+    channels?: number;
+    format?: string;
+  };
 };
 
 export type LatestTranscription = TranscriptionResult & {
@@ -40,7 +23,7 @@ export type LatestTranscription = TranscriptionResult & {
 
 export type BridgeInputEvent = {
   id: number;
-  source: "bridge";
+  source: string;
   type: "stt";
   target: "audio";
   value: string;
@@ -51,5 +34,10 @@ export type BridgeInputEvent = {
     processingMs: number;
     provider: string;
     model: string;
+    audio?: {
+      sampleRate?: number;
+      channels?: number;
+      format?: string;
+    };
   };
 };

@@ -21,11 +21,7 @@ wifi:
   health_check_interval_ms: 5000
 
 stt:
-  enabled: false
-  base_url: "http://127.0.0.1:8790"
-  timeout_ms: 30000
-  emit_event: true
-  max_file_size_mb: 20
+  transcribe_url: "http://<speech-services-lan-ip>:8790/transcribe"
 
 events:
   include_bridge_events: true
