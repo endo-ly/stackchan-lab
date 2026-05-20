@@ -13,7 +13,7 @@ HTTP client
   -> StackChan Body Firmware
 ```
 
-The bridge does not handle conversation state, personality, memory, TTS, or STT. It is a control bridge between HTTP and the body firmware.
+The bridge does not handle conversation state, personality, memory, or TTS. It can call an external STT service and store the transcription as a bridge-side input event.
 
 ## Requirements
 
@@ -22,6 +22,7 @@ The bridge does not handle conversation state, personality, memory, TTS, or STT.
 - USB Serial connection to StackChan for serial mode
 - Wi-Fi reachable StackChan for wifi mode
 - StackChan Body Firmware Phase 8 or later for wifi mode
+- speech-services for STT mode
 
 ## Setup
 
@@ -68,6 +69,22 @@ wifi:
   token: "<device-token>"
   timeout_ms: 5000
 ```
+
+STT configuration:
+
+```yaml
+stt:
+  enabled: true
+  base_url: "http://127.0.0.1:8790"
+  timeout_ms: 30000
+  emit_event: true
+  max_file_size_mb: 20
+
+events:
+  include_bridge_events: true
+```
+
+`speech-services` is a separate Python service. The bridge only calls it over HTTP.
 
 `config.yaml` is ignored by git because it is local machine configuration.
 
@@ -147,6 +164,12 @@ The smoke test checks:
 - `GET /events`
 - `POST /reset`
 - invalid `/face` values return HTTP 400
+
+When `speech-services` is running and STT is enabled in `config.yaml`, include a sample WAV:
+
+```bash
+STACKCHAN_STT_SAMPLE_WAV=/root/workspace/speech-services/sample/jsut-basic5000-4501-16k.wav npm run smoke
+```
 
 ## Phase 8 Scope
 
@@ -403,9 +426,44 @@ curl -X POST http://127.0.0.1:8787/play-wav \
   -F "file=@test-assets/sample.wav"
 ```
 
+### GET /stt/health
+
+Check whether the external STT service is enabled and reachable.
+
+```bash
+curl http://127.0.0.1:8787/stt/health
+```
+
+### GET /stt/capabilities
+
+Get STT provider capabilities from `speech-services`.
+
+```bash
+curl http://127.0.0.1:8787/stt/capabilities
+```
+
+### POST /stt/transcribe-file
+
+Send a WAV file to `speech-services` through the bridge. The result is stored as the latest transcription. When `stt.emit_event` is true, it is also added as a bridge-side input event.
+
+```bash
+curl -X POST http://127.0.0.1:8787/stt/transcribe-file \
+  -F "file=@sample.wav"
+```
+
+The response includes `processingMs` from `speech-services`.
+
+### GET /stt/latest
+
+Get the latest STT result.
+
+```bash
+curl http://127.0.0.1:8787/stt/latest
+```
+
 ### GET /events
 
-Get the current firmware-side input event queue. Reading events does not clear them.
+Get the current input event queue. Firmware-side events are returned with `source: "device"`. STT events are bridge-side events with `source: "bridge"` when `events.include_bridge_events` is true. Reading events does not clear them.
 
 ```bash
 curl http://127.0.0.1:8787/events
@@ -421,7 +479,7 @@ curl http://127.0.0.1:8787/events/latest
 
 ### POST /events/clear
 
-Clear the firmware-side input event queue.
+Clear the firmware-side input event queue and bridge-side events.
 
 ```bash
 curl -X POST http://127.0.0.1:8787/events/clear
@@ -482,6 +540,25 @@ Not implemented:
 - Server-Sent Events
 - External application integration
 
+## Phase 9 Scope
+
+Implemented:
+
+- STT service client
+- `GET /stt/health`
+- `GET /stt/capabilities`
+- `POST /stt/transcribe-file`
+- `GET /stt/latest`
+- STT result as bridge-side input event
+- `/events` integration for bridge-side events
+
+Not implemented:
+
+- Wake Word
+- Streaming STT
+- StackChan microphone capture
+- Conversation integration
+
 ## Error Shape
 
 Success:
@@ -508,7 +585,6 @@ Failure:
 ## Out of Scope
 
 - TTS
-- STT
 - WebSocket
 - Server-Sent Events
 - Authentication
