@@ -45,19 +45,6 @@ void measureMicBlock(const int16_t* samples, size_t sampleCount, uint32_t& rms, 
     peak = static_cast<int16_t>(maxAbs > INT16_MAX ? INT16_MAX : maxAbs);
 }
 
-void applyMicGain(int16_t* samples, size_t sampleCount)
-{
-    for (size_t i = 0; i < sampleCount; ++i) {
-        int32_t amplified = static_cast<int32_t>(samples[i]) * kWakeMicGain;
-        if (amplified > INT16_MAX) {
-            amplified = INT16_MAX;
-        } else if (amplified < INT16_MIN) {
-            amplified = INT16_MIN;
-        }
-        samples[i] = static_cast<int16_t>(amplified);
-    }
-}
-
 }  // namespace
 
 void WakeController::begin()
@@ -109,10 +96,10 @@ void WakeController::update()
     }
 
     state_.setDiagnostics(queuedBlocks_, processedBlocks_, featureFrames_, inferenceRuns_, lastSamplesConsumed_, M5.Mic.isRecording());
-    if (micBlockPending_) {
-        processMicBlock();
+    if (micChunkPending_) {
+        processMicChunk();
     }
-    queueMicBlock();
+    queueMicChunk();
 }
 
 bool WakeController::start(String& error)
@@ -136,17 +123,24 @@ bool WakeController::start(String& error)
     lastSamplesConsumed_ = 0;
     maxRawOutput_ = 0;
     state_.setDiagnostics(0, 0, 0, 0, 0, M5.Mic.isRecording());
-    state_.setSignalDiagnostics(0, 0, 0, 0, 0, 0);
+    state_.setSignalDiagnostics(0, 0, 0, 0, 0, 0, 0, 0, 0, INT8_MIN, 0, 0);
     state_.setStartedAtMs(millis());
     state_.clearError();
     resetProbabilities();
+    if (interpreter_->Reset() != kTfLiteOk) {
+        error = "WAKE_INTERPRETER_RESET_FAILED";
+        state_.setError(error);
+        state_.setRunning(false);
+        stopFrontend();
+        return false;
+    }
     return true;
 }
 
 void WakeController::stop()
 {
     stopFrontend();
-    micBlockPending_ = false;
+    micChunkPending_ = false;
     state_.setRunning(false);
 }
 
@@ -244,40 +238,48 @@ void WakeController::stopFrontend()
     }
 }
 
-void WakeController::queueMicBlock()
+void WakeController::queueMicChunk()
 {
-    if (micBlockPending_ || M5.Mic.isRecording() >= 2) {
+    if (micChunkPending_ || M5.Mic.isRecording() >= 2) {
         return;
     }
-    if (!M5.Mic.record(micBlock_, sizeof(micBlock_) / sizeof(micBlock_[0]), 16000, false)) {
+    if (!M5.Mic.record(micChunk_, sizeof(micChunk_) / sizeof(micChunk_[0]), 16000, false)) {
         state_.setError("WAKE_MIC_RECORD_FAILED");
         state_.setRunning(false);
         stopFrontend();
         return;
     }
-    micBlockPending_ = true;
-    ++queuedBlocks_;
+    micChunkPending_ = true;
+    queuedBlocks_ += kMicBlocksPerChunk;
     state_.setDiagnostics(queuedBlocks_, processedBlocks_, featureFrames_, inferenceRuns_, lastSamplesConsumed_, M5.Mic.isRecording());
 }
 
-void WakeController::processMicBlock()
+void WakeController::processMicChunk()
 {
     if (M5.Mic.isRecording() != 0) {
         return;
     }
-    micBlockPending_ = false;
-    ++processedBlocks_;
-    applyMicGain(micBlock_, sizeof(micBlock_) / sizeof(micBlock_[0]));
+    micChunkPending_ = false;
     uint32_t rms = 0;
     int16_t peak = 0;
-    measureMicBlock(micBlock_, sizeof(micBlock_) / sizeof(micBlock_[0]), rms, peak);
-    state_.setSignalDiagnostics(rms, peak, state_.lastFeatureMin(), state_.lastFeatureMax(), state_.lastRawOutput(), maxRawOutput_);
+    measureMicBlock(micChunk_, sizeof(micChunk_) / sizeof(micChunk_[0]), rms, peak);
+    const uint32_t maxRms = rms > state_.maxMicRms() ? rms : state_.maxMicRms();
+    const int16_t maxPeak = peak > state_.maxMicPeak() ? peak : state_.maxMicPeak();
+    state_.setSignalDiagnostics(rms, peak, maxRms, maxPeak, state_.lastFeatureRawMin(), state_.lastFeatureRawMax(), state_.maxFeatureRawMax(), state_.lastFeatureMin(), state_.lastFeatureMax(), state_.maxFeatureMax(), state_.lastRawOutput(), maxRawOutput_);
 
     String error;
-    if (!processFeatures(micBlock_, sizeof(micBlock_) / sizeof(micBlock_[0]), error)) {
-        state_.setError(error);
-        state_.setRunning(false);
-        stopFrontend();
+    for (size_t i = 0; i < kMicBlocksPerChunk; ++i) {
+        const int16_t* block = micChunk_ + (i * kMicBlockSamples);
+        ++processedBlocks_;
+        if (!processFeatures(block, kMicBlockSamples, error)) {
+            state_.setError(error);
+            state_.setRunning(false);
+            stopFrontend();
+            return;
+        }
+        if (!state_.running()) {
+            return;
+        }
     }
 }
 
@@ -296,9 +298,17 @@ bool WakeController::processFeatures(const int16_t* samples, size_t sampleCount,
     }
 
     int8_t features[kWakeFeatureSize] = {};
+    uint16_t rawMin = UINT16_MAX;
+    uint16_t rawMax = 0;
     int8_t featureMin = INT8_MAX;
     int8_t featureMax = INT8_MIN;
     for (size_t i = 0; i < output.size; ++i) {
+        if (output.values[i] < rawMin) {
+            rawMin = output.values[i];
+        }
+        if (output.values[i] > rawMax) {
+            rawMax = output.values[i];
+        }
         features[i] = scaleFeature(output.values[i]);
         if (features[i] < featureMin) {
             featureMin = features[i];
@@ -308,7 +318,9 @@ bool WakeController::processFeatures(const int16_t* samples, size_t sampleCount,
         }
     }
     ++featureFrames_;
-    state_.setSignalDiagnostics(state_.lastMicRms(), state_.lastMicPeak(), featureMin, featureMax, state_.lastRawOutput(), maxRawOutput_);
+    const uint16_t maxRawMax = rawMax > state_.maxFeatureRawMax() ? rawMax : state_.maxFeatureRawMax();
+    const int8_t maxFeatureMax = featureMax > state_.maxFeatureMax() ? featureMax : state_.maxFeatureMax();
+    state_.setSignalDiagnostics(state_.lastMicRms(), state_.lastMicPeak(), state_.maxMicRms(), state_.maxMicPeak(), rawMin, rawMax, maxRawMax, featureMin, featureMax, maxFeatureMax, state_.lastRawOutput(), maxRawOutput_);
     state_.setDiagnostics(queuedBlocks_, processedBlocks_, featureFrames_, inferenceRuns_, lastSamplesConsumed_, M5.Mic.isRecording());
     return runInference(features, error);
 }
@@ -344,7 +356,7 @@ bool WakeController::runInference(const int8_t features[], String& error)
         probabilityIndex_ = 0;
     }
     recentProbabilities_[probabilityIndex_] = rawOutput;
-    state_.setSignalDiagnostics(state_.lastMicRms(), state_.lastMicPeak(), state_.lastFeatureMin(), state_.lastFeatureMax(), rawOutput, maxRawOutput_);
+    state_.setSignalDiagnostics(state_.lastMicRms(), state_.lastMicPeak(), state_.maxMicRms(), state_.maxMicPeak(), state_.lastFeatureRawMin(), state_.lastFeatureRawMax(), state_.maxFeatureRawMax(), state_.lastFeatureMin(), state_.lastFeatureMax(), state_.maxFeatureMax(), rawOutput, maxRawOutput_);
 
     if (recentProbabilities_[probabilityIndex_] < probabilityCutoff()) {
         ++ignoreWindows_;
@@ -354,6 +366,7 @@ bool WakeController::runInference(const int8_t features[], String& error)
     }
 
     if (determineDetected()) {
+        state_.captureDetectedDiagnostics();
         state_.setDetected(true);
         state_.setLastDetectedAtMs(millis());
         state_.setRunning(false);

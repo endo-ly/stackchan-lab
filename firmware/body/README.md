@@ -548,7 +548,7 @@ Current foundation:
 - `esp-micro-speech-features`
 - `MicroTFLite`
 - bundled `okay_nabu` microWakeWord model
-- 16kHz mic block streaming into the wake frontend
+- 16kHz mic chunk capture split into 10ms frontend blocks
 - TFLite inference loop
 - wake-triggered 3-second recording and upload to configured `stt-adapter`
 - `WakeState`
@@ -598,15 +598,27 @@ Expected status after wake start:
       "mic": {
         "rms": 0,
         "peak": 0,
+        "maxRms": 0,
+        "maxPeak": 0,
         "recordingState": 0
       },
       "features": {
+        "rawMin": 0,
+        "rawMax": 0,
+        "maxRawMax": 0,
         "min": 0,
-        "max": 0
+        "max": 0,
+        "maxSeen": 0
       },
       "model": {
         "lastRawOutput": 0,
         "maxRawOutput": 0
+      },
+      "detected": {
+        "maxRawOutput": 0,
+        "averageProbability": 0,
+        "processedBlocks": 0,
+        "inferenceRuns": 0
       }
     },
     "wakeUpload": {
@@ -622,4 +634,4 @@ Expected status after wake start:
 }
 ```
 
-`debug` is intentionally kept for wake word tuning. It shows whether audio blocks are queued, features are generated, inference is running, and whether the model output is moving. Wake audio currently applies a fixed input gain before feature generation.
+`debug` is intentionally kept for wake word tuning. It shows whether audio chunks are queued, features are generated, inference is running, and whether the model output is moving. `debug.model` describes the current wake session; `debug.detected` keeps the last detection snapshot even after wake waiting restarts.

@@ -147,6 +147,14 @@ void BodyController::showWakeDetected()
     led_.setMood(Mood::Warning);
 }
 
+void BodyController::clearWakeDetected()
+{
+    face_.setExpression(state_.expression());
+    face_.setSpeaking(false);
+    face_.setMouthOpen(false);
+    led_.setMood(state_.mood());
+}
+
 bool BodyController::startWake(String& error)
 {
     stopAudio();

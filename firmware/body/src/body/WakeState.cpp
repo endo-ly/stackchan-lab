@@ -19,14 +19,24 @@ uint32_t WakeState::inferenceRuns() const { return inferenceRuns_; }
 uint32_t WakeState::lastSamplesConsumed() const { return lastSamplesConsumed_; }
 uint32_t WakeState::lastMicRms() const { return lastMicRms_; }
 int16_t WakeState::lastMicPeak() const { return lastMicPeak_; }
+uint32_t WakeState::maxMicRms() const { return maxMicRms_; }
+int16_t WakeState::maxMicPeak() const { return maxMicPeak_; }
+uint16_t WakeState::lastFeatureRawMin() const { return lastFeatureRawMin_; }
+uint16_t WakeState::lastFeatureRawMax() const { return lastFeatureRawMax_; }
+uint16_t WakeState::maxFeatureRawMax() const { return maxFeatureRawMax_; }
 int8_t WakeState::lastFeatureMin() const { return lastFeatureMin_; }
 int8_t WakeState::lastFeatureMax() const { return lastFeatureMax_; }
+int8_t WakeState::maxFeatureMax() const { return maxFeatureMax_; }
 uint8_t WakeState::lastRawOutput() const { return lastRawOutput_; }
 uint8_t WakeState::maxRawOutput() const { return maxRawOutput_; }
 uint8_t WakeState::micRecordingState() const { return micRecordingState_; }
 const String& WakeState::lastError() const { return lastError_; }
 uint32_t WakeState::startedAtMs() const { return startedAtMs_; }
 uint32_t WakeState::lastDetectedAtMs() const { return lastDetectedAtMs_; }
+uint8_t WakeState::detectedMaxRawOutput() const { return detectedMaxRawOutput_; }
+uint8_t WakeState::detectedAverageProbability() const { return detectedAverageProbability_; }
+uint32_t WakeState::detectedProcessedBlocks() const { return detectedProcessedBlocks_; }
+uint32_t WakeState::detectedInferenceRuns() const { return detectedInferenceRuns_; }
 
 void WakeState::setEngine(const String& engine) { engine_ = engine; }
 void WakeState::setModelName(const String& modelName) { modelName_ = modelName; }
@@ -47,12 +57,18 @@ void WakeState::setDiagnostics(uint32_t queuedBlocks, uint32_t processedBlocks, 
     lastSamplesConsumed_ = lastSamplesConsumed;
     micRecordingState_ = micRecordingState;
 }
-void WakeState::setSignalDiagnostics(uint32_t lastMicRms, int16_t lastMicPeak, int8_t lastFeatureMin, int8_t lastFeatureMax, uint8_t lastRawOutput, uint8_t maxRawOutput)
+void WakeState::setSignalDiagnostics(uint32_t lastMicRms, int16_t lastMicPeak, uint32_t maxMicRms, int16_t maxMicPeak, uint16_t lastFeatureRawMin, uint16_t lastFeatureRawMax, uint16_t maxFeatureRawMax, int8_t lastFeatureMin, int8_t lastFeatureMax, int8_t maxFeatureMax, uint8_t lastRawOutput, uint8_t maxRawOutput)
 {
     lastMicRms_ = lastMicRms;
     lastMicPeak_ = lastMicPeak;
+    maxMicRms_ = maxMicRms;
+    maxMicPeak_ = maxMicPeak;
+    lastFeatureRawMin_ = lastFeatureRawMin;
+    lastFeatureRawMax_ = lastFeatureRawMax;
+    maxFeatureRawMax_ = maxFeatureRawMax;
     lastFeatureMin_ = lastFeatureMin;
     lastFeatureMax_ = lastFeatureMax;
+    maxFeatureMax_ = maxFeatureMax;
     lastRawOutput_ = lastRawOutput;
     maxRawOutput_ = maxRawOutput;
 }
@@ -61,6 +77,13 @@ void WakeState::setRunning(bool running) { running_ = running; }
 void WakeState::setDetected(bool detected) { detected_ = detected; }
 void WakeState::setStartedAtMs(uint32_t startedAtMs) { startedAtMs_ = startedAtMs; }
 void WakeState::setLastDetectedAtMs(uint32_t lastDetectedAtMs) { lastDetectedAtMs_ = lastDetectedAtMs; }
+void WakeState::captureDetectedDiagnostics()
+{
+    detectedMaxRawOutput_ = maxRawOutput_;
+    detectedAverageProbability_ = averageProbability_;
+    detectedProcessedBlocks_ = processedBlocks_;
+    detectedInferenceRuns_ = inferenceRuns_;
+}
 void WakeState::setError(const String& error) { lastError_ = error; }
 void WakeState::clearError() { lastError_ = ""; }
 

@@ -29,8 +29,8 @@ private:
     bool loadModel(String& error);
     bool startFrontend(String& error);
     void stopFrontend();
-    void queueMicBlock();
-    void processMicBlock();
+    void queueMicChunk();
+    void processMicChunk();
     bool processFeatures(const int16_t* samples, size_t sampleCount, String& error);
     bool runInference(const int8_t features[], String& error);
     bool determineDetected();
@@ -49,12 +49,14 @@ private:
     tflite::MicroResourceVariables* resourceVariables_ = nullptr;
     tflite::MicroInterpreter* interpreter_ = nullptr;
     bool frontendReady_ = false;
-    bool micBlockPending_ = false;
+    bool micChunkPending_ = false;
     uint8_t currentStrideStep_ = 0;
     uint8_t recentProbabilities_[kWakeSlidingWindowSize] = {};
     size_t probabilityIndex_ = 0;
     int16_t ignoreWindows_ = -kWakeMinSlicesBeforeDetection;
-    int16_t micBlock_[160] = {};
+    static constexpr size_t kMicBlockSamples = 160;
+    static constexpr size_t kMicBlocksPerChunk = 16;
+    int16_t micChunk_[kMicBlockSamples * kMicBlocksPerChunk] = {};
     uint32_t queuedBlocks_ = 0;
     uint32_t processedBlocks_ = 0;
     uint32_t featureFrames_ = 0;

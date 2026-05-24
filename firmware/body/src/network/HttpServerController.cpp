@@ -236,6 +236,7 @@ void HttpServerController::processWakeDetection()
 
 void HttpServerController::restartWakeDetection()
 {
+    body_.clearWakeDetected();
     String wakeError;
     if (!body_.startWake(wakeError)) {
         lastWakeUploadError_ = lastWakeUploadError_.length() > 0 ? lastWakeUploadError_ : wakeError;
@@ -487,13 +488,24 @@ void HttpServerController::handleWakeStatus()
     JsonObject mic = debug["mic"].to<JsonObject>();
     mic["rms"] = wake.lastMicRms();
     mic["peak"] = wake.lastMicPeak();
+    mic["maxRms"] = wake.maxMicRms();
+    mic["maxPeak"] = wake.maxMicPeak();
     mic["recordingState"] = wake.micRecordingState();
     JsonObject features = debug["features"].to<JsonObject>();
+    features["rawMin"] = wake.lastFeatureRawMin();
+    features["rawMax"] = wake.lastFeatureRawMax();
+    features["maxRawMax"] = wake.maxFeatureRawMax();
     features["min"] = wake.lastFeatureMin();
     features["max"] = wake.lastFeatureMax();
+    features["maxSeen"] = wake.maxFeatureMax();
     JsonObject model = debug["model"].to<JsonObject>();
     model["lastRawOutput"] = wake.lastRawOutput();
     model["maxRawOutput"] = wake.maxRawOutput();
+    JsonObject detectedDebug = debug["detected"].to<JsonObject>();
+    detectedDebug["maxRawOutput"] = wake.detectedMaxRawOutput();
+    detectedDebug["averageProbability"] = wake.detectedAverageProbability();
+    detectedDebug["processedBlocks"] = wake.detectedProcessedBlocks();
+    detectedDebug["inferenceRuns"] = wake.detectedInferenceRuns();
     doc["startedAtMs"] = wake.startedAtMs();
     doc["lastDetectedAtMs"] = wake.lastDetectedAtMs();
     doc["lastError"] = wake.lastError();

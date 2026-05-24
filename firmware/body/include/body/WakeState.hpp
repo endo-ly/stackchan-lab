@@ -23,14 +23,24 @@ public:
     uint32_t lastSamplesConsumed() const;
     uint32_t lastMicRms() const;
     int16_t lastMicPeak() const;
+    uint32_t maxMicRms() const;
+    int16_t maxMicPeak() const;
+    uint16_t lastFeatureRawMin() const;
+    uint16_t lastFeatureRawMax() const;
+    uint16_t maxFeatureRawMax() const;
     int8_t lastFeatureMin() const;
     int8_t lastFeatureMax() const;
+    int8_t maxFeatureMax() const;
     uint8_t lastRawOutput() const;
     uint8_t maxRawOutput() const;
     uint8_t micRecordingState() const;
     const String& lastError() const;
     uint32_t startedAtMs() const;
     uint32_t lastDetectedAtMs() const;
+    uint8_t detectedMaxRawOutput() const;
+    uint8_t detectedAverageProbability() const;
+    uint32_t detectedProcessedBlocks() const;
+    uint32_t detectedInferenceRuns() const;
 
     void setEngine(const String& engine);
     void setModelName(const String& modelName);
@@ -39,12 +49,13 @@ public:
     void setModelBytes(uint32_t modelBytes);
     void setProbabilities(uint8_t lastProbability, uint8_t averageProbability);
     void setDiagnostics(uint32_t queuedBlocks, uint32_t processedBlocks, uint32_t featureFrames, uint32_t inferenceRuns, uint32_t lastSamplesConsumed, uint8_t micRecordingState);
-    void setSignalDiagnostics(uint32_t lastMicRms, int16_t lastMicPeak, int8_t lastFeatureMin, int8_t lastFeatureMax, uint8_t lastRawOutput, uint8_t maxRawOutput);
+    void setSignalDiagnostics(uint32_t lastMicRms, int16_t lastMicPeak, uint32_t maxMicRms, int16_t maxMicPeak, uint16_t lastFeatureRawMin, uint16_t lastFeatureRawMax, uint16_t maxFeatureRawMax, int8_t lastFeatureMin, int8_t lastFeatureMax, int8_t maxFeatureMax, uint8_t lastRawOutput, uint8_t maxRawOutput);
     void setAvailable(bool available);
     void setRunning(bool running);
     void setDetected(bool detected);
     void setStartedAtMs(uint32_t startedAtMs);
     void setLastDetectedAtMs(uint32_t lastDetectedAtMs);
+    void captureDetectedDiagnostics();
     void setError(const String& error);
     void clearError();
 
@@ -66,14 +77,24 @@ private:
     uint32_t lastSamplesConsumed_ = 0;
     uint32_t lastMicRms_ = 0;
     int16_t lastMicPeak_ = 0;
+    uint32_t maxMicRms_ = 0;
+    int16_t maxMicPeak_ = 0;
+    uint16_t lastFeatureRawMin_ = 0;
+    uint16_t lastFeatureRawMax_ = 0;
+    uint16_t maxFeatureRawMax_ = 0;
     int8_t lastFeatureMin_ = 0;
     int8_t lastFeatureMax_ = 0;
+    int8_t maxFeatureMax_ = INT8_MIN;
     uint8_t lastRawOutput_ = 0;
     uint8_t maxRawOutput_ = 0;
     uint8_t micRecordingState_ = 0;
     String lastError_;
     uint32_t startedAtMs_ = 0;
     uint32_t lastDetectedAtMs_ = 0;
+    uint8_t detectedMaxRawOutput_ = 0;
+    uint8_t detectedAverageProbability_ = 0;
+    uint32_t detectedProcessedBlocks_ = 0;
+    uint32_t detectedInferenceRuns_ = 0;
 };
 
 }  // namespace stackchan

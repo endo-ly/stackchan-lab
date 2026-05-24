@@ -29,6 +29,7 @@ public:
     bool setAudioVolume(int volume);
     bool recordMicWav(uint32_t durationMs, String& error);
     void showWakeDetected();
+    void clearWakeDetected();
     bool startWake(String& error);
     void stopWake();
 
