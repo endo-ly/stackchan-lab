@@ -413,7 +413,7 @@ openssl rand -hex 32
 tokenを再生成する場合は、新しいtokenを作って `npm run wifi:setup -- config.yaml` を再実行する。
 その後、Bridge側のローカル `config.yaml` の `wifi.token` も同じ値へ更新する。
 
-speech-services URLなどの運用設定は、Wi-Fi設定とは別に送る。
+stt-adapter URLなどの運用設定は、Wi-Fi設定とは別に送る。
 
 ```bash
 npm run device:config -- config.yaml
@@ -473,12 +473,15 @@ Implemented in this step:
 - microphone initialization through M5Unified
 - short 16kHz mono 16-bit recording
 - in-memory WAV generation
-- upload to configured `speech-services`
+- upload to configured `stt-adapter`
 - HTTP status and record endpoints
+- microWakeWord dependency foundation
+- wake word state model
+- HTTP wake status/start/stop endpoints
 
 Not implemented in this step:
 
-- wake word detection
+- wake-triggered recording
 
 Microphone status:
 
@@ -529,11 +532,94 @@ cd /root/workspace/stackchan-lab/bridge
 npm run device:config -- config.yaml
 ```
 
-When `speech-services` has a Bridge callback configured, this same `/mic/record` flow also creates a Bridge STT event:
+When `stt-adapter` has a Bridge callback configured, this same `/mic/record` flow also creates a Bridge STT event:
 
 ```bash
 curl "http://127.0.0.1:8787/stt/latest"
 curl "http://127.0.0.1:8787/events"
 ```
 
-Wake word is not implemented in this step. It should use a real on-device wake word engine such as ESP-SR WakeNet or microWakeWord, not a volume threshold.
+## Phase 9.5 Wake Word
+
+Wake word detection is being implemented with a real on-device microWakeWord-style path.
+
+Current foundation:
+
+- `esp-micro-speech-features`
+- `MicroTFLite`
+- bundled `okay_nabu` microWakeWord model
+- 16kHz mic block streaming into the wake frontend
+- TFLite inference loop
+- wake-triggered 3-second recording and upload to configured `stt-adapter`
+- `WakeState`
+- `WakeController`
+- `GET /wake/status`
+- `POST /wake/start`
+- `POST /wake/stop`
+
+The model can be loaded and tensor allocation is verified at boot.
+`/wake/start` starts on-device mic streaming and inference.
+The current bundled model listens for `Okay Nabu`; it is an engine bring-up model, not the final StackChan Japanese wake word.
+`StackChan` / `スタックチャン` is not available as a public microWakeWord model in the checked model repositories. A real StackChan wake word requires a dedicated model training step.
+
+```bash
+curl -H "X-StackChan-Token: $TOKEN" \
+  "http://$STACKCHAN_IP/wake/status"
+
+curl -X POST "http://$STACKCHAN_IP/wake/start" \
+  -H "X-StackChan-Token: $TOKEN"
+
+curl -X POST "http://$STACKCHAN_IP/wake/stop" \
+  -H "X-StackChan-Token: $TOKEN"
+```
+
+Expected status after wake start:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "available": true,
+    "modelLoaded": true,
+    "running": true,
+    "detected": false,
+    "engine": "microWakeWord",
+    "modelName": "okay_nabu",
+    "wakeWord": "Okay Nabu",
+    "modelBytes": 60264,
+    "lastProbability": 0,
+    "averageProbability": 0,
+    "debug": {
+      "queuedBlocks": 0,
+      "processedBlocks": 0,
+      "featureFrames": 0,
+      "inferenceRuns": 0,
+      "lastSamplesConsumed": 0,
+      "mic": {
+        "rms": 0,
+        "peak": 0,
+        "recordingState": 0
+      },
+      "features": {
+        "min": 0,
+        "max": 0
+      },
+      "model": {
+        "lastRawOutput": 0,
+        "maxRawOutput": 0
+      }
+    },
+    "wakeUpload": {
+      "inProgress": false,
+      "lastHandledDetectedAtMs": 0,
+      "lastUploadAtMs": 0,
+      "lastHttpStatus": 0,
+      "lastError": "",
+      "lastSpeechResponse": ""
+    },
+    "lastError": ""
+  }
+}
+```
+
+`debug` is intentionally kept for wake word tuning. It shows whether audio blocks are queued, features are generated, inference is running, and whether the model output is moving. Wake audio currently applies a fixed input gain before feature generation.

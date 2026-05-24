@@ -8,6 +8,7 @@
 #include "body/LedController.hpp"
 #include "body/MicController.hpp"
 #include "body/MotionController.hpp"
+#include "body/WakeController.hpp"
 
 namespace stackchan {
 
@@ -27,11 +28,15 @@ public:
     void stopAudio();
     bool setAudioVolume(int volume);
     bool recordMicWav(uint32_t durationMs, String& error);
+    void showWakeDetected();
+    bool startWake(String& error);
+    void stopWake();
 
     const BodyState& getState() const;
     const FaceState& getFaceState() const;
     const AudioState& getAudioState() const;
     const MicState& getMicState() const;
+    const WakeState& getWakeState() const;
     const uint8_t* micWavBuffer() const;
     size_t micWavSize() const;
     InputController& input();
@@ -48,6 +53,7 @@ private:
     FaceController face_;
     LedController led_;
     MotionController motion_;
+    WakeController wake_;
 };
 
 }  // namespace stackchan

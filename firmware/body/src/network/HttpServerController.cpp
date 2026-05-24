@@ -148,6 +148,7 @@ void HttpServerController::update()
 {
     if (running_) {
         server_.handleClient();
+        processWakeDetection();
     }
 }
 
@@ -173,6 +174,9 @@ void HttpServerController::registerRoutes()
     server_.on("/audio/stop", HTTP_POST, [this]() { handleAudioStop(); });
     server_.on("/mic/status", HTTP_GET, [this]() { handleMicStatus(); });
     server_.on("/mic/record", HTTP_POST, [this]() { handleMicRecord(); });
+    server_.on("/wake/status", HTTP_GET, [this]() { handleWakeStatus(); });
+    server_.on("/wake/start", HTTP_POST, [this]() { handleWakeStart(); });
+    server_.on("/wake/stop", HTTP_POST, [this]() { handleWakeStop(); });
     server_.on("/events", HTTP_GET, [this]() { handleEvents(); });
     server_.on("/events/latest", HTTP_GET, [this]() { handleLatestEvent(); });
     server_.on("/events/clear", HTTP_POST, [this]() { handleClearEvents(); });
@@ -181,6 +185,61 @@ void HttpServerController::registerRoutes()
     server_.on("/wifi/clear", HTTP_POST, [this]() { handleWifiClear(); });
     server_.on("/camera/snapshot", HTTP_GET, [this]() { handleCameraSnapshot(); });
     server_.onNotFound([this]() { sendError(404, "NOT_FOUND", "Route not found"); });
+}
+
+void HttpServerController::processWakeDetection()
+{
+    if (wakeUploadInProgress_) {
+        return;
+    }
+
+    const WakeState& wake = body_.getWakeState();
+    if (!wake.detected() || wake.lastDetectedAtMs() == 0 || wake.lastDetectedAtMs() == handledWakeDetectedAtMs_) {
+        return;
+    }
+
+    handledWakeDetectedAtMs_ = wake.lastDetectedAtMs();
+    lastWakeUploadAtMs_ = millis();
+    lastWakeUploadHttpStatus_ = 0;
+    lastWakeUploadError_ = "";
+    lastWakeSpeechResponse_ = "";
+
+    const String url = wifi_.config().speechServicesUrl;
+    if (url.length() == 0) {
+        lastWakeUploadError_ = "SPEECH_SERVICES_NOT_CONFIGURED";
+        restartWakeDetection();
+        return;
+    }
+
+    wakeUploadInProgress_ = true;
+    body_.showWakeDetected();
+    String error;
+    if (!body_.recordMicWav(3000, error)) {
+        lastWakeUploadError_ = error;
+        wakeUploadInProgress_ = false;
+        restartWakeDetection();
+        return;
+    }
+
+    int statusCode = 0;
+    String response;
+    const bool uploaded = postMultipartWav(url, "stackchan-wake", body_.micWavBuffer(), body_.micWavSize(), statusCode, response, error);
+    lastWakeUploadHttpStatus_ = statusCode;
+    lastWakeSpeechResponse_ = response;
+    if (!uploaded) {
+        lastWakeUploadError_ = error;
+    }
+
+    wakeUploadInProgress_ = false;
+    restartWakeDetection();
+}
+
+void HttpServerController::restartWakeDetection()
+{
+    String wakeError;
+    if (!body_.startWake(wakeError)) {
+        lastWakeUploadError_ = lastWakeUploadError_.length() > 0 ? lastWakeUploadError_ : wakeError;
+    }
 }
 
 bool HttpServerController::requireAuth()
@@ -402,6 +461,67 @@ void HttpServerController::handleMicRecord()
     String data;
     serializeJson(result, data);
     sendOk(data);
+}
+
+void HttpServerController::handleWakeStatus()
+{
+    if (!requireAuth()) return;
+    const WakeState& wake = body_.getWakeState();
+    JsonDocument doc;
+    doc["available"] = wake.available();
+    doc["modelLoaded"] = wake.modelLoaded();
+    doc["running"] = wake.running();
+    doc["detected"] = wake.detected();
+    doc["engine"] = wake.engine();
+    doc["modelName"] = wake.modelName();
+    doc["wakeWord"] = wake.wakeWord();
+    doc["modelBytes"] = wake.modelBytes();
+    doc["lastProbability"] = wake.lastProbability();
+    doc["averageProbability"] = wake.averageProbability();
+    JsonObject debug = doc["debug"].to<JsonObject>();
+    debug["queuedBlocks"] = wake.queuedBlocks();
+    debug["processedBlocks"] = wake.processedBlocks();
+    debug["featureFrames"] = wake.featureFrames();
+    debug["inferenceRuns"] = wake.inferenceRuns();
+    debug["lastSamplesConsumed"] = wake.lastSamplesConsumed();
+    JsonObject mic = debug["mic"].to<JsonObject>();
+    mic["rms"] = wake.lastMicRms();
+    mic["peak"] = wake.lastMicPeak();
+    mic["recordingState"] = wake.micRecordingState();
+    JsonObject features = debug["features"].to<JsonObject>();
+    features["min"] = wake.lastFeatureMin();
+    features["max"] = wake.lastFeatureMax();
+    JsonObject model = debug["model"].to<JsonObject>();
+    model["lastRawOutput"] = wake.lastRawOutput();
+    model["maxRawOutput"] = wake.maxRawOutput();
+    doc["startedAtMs"] = wake.startedAtMs();
+    doc["lastDetectedAtMs"] = wake.lastDetectedAtMs();
+    doc["lastError"] = wake.lastError();
+    JsonObject upload = doc["wakeUpload"].to<JsonObject>();
+    upload["inProgress"] = wakeUploadInProgress_;
+    upload["lastHandledDetectedAtMs"] = handledWakeDetectedAtMs_;
+    upload["lastUploadAtMs"] = lastWakeUploadAtMs_;
+    upload["lastHttpStatus"] = lastWakeUploadHttpStatus_;
+    upload["lastError"] = lastWakeUploadError_;
+    upload["lastSpeechResponse"] = lastWakeSpeechResponse_;
+    String data;
+    serializeJson(doc, data);
+    sendOk(data);
+}
+
+void HttpServerController::handleWakeStart()
+{
+    if (!requireAuth()) return;
+    String error;
+    if (!body_.startWake(error)) return sendError(409, error.c_str(), error);
+    handleWakeStatus();
+}
+
+void HttpServerController::handleWakeStop()
+{
+    if (!requireAuth()) return;
+    body_.stopWake();
+    handleWakeStatus();
 }
 
 void HttpServerController::handleEvents()

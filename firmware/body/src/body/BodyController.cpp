@@ -20,6 +20,7 @@ void BodyController::begin()
     display_.showBoot();
     audio_.begin();
     mic_.begin();
+    wake_.begin();
     input_.begin();
     led_.begin();
     motion_.begin(state_);
@@ -50,6 +51,7 @@ void BodyController::update()
     face_.update();
     led_.update();
     motion_.update();
+    wake_.update();
 }
 
 void BodyController::setExpression(Expression expression)
@@ -130,11 +132,30 @@ bool BodyController::setAudioVolume(int volume)
 
 bool BodyController::recordMicWav(uint32_t durationMs, String& error)
 {
+    stopWake();
     stopAudio();
     led_.setMood(Mood::Active);
     const bool ok = mic_.recordWav(durationMs, error);
     led_.setMood(state_.mood());
     return ok;
+}
+
+void BodyController::showWakeDetected()
+{
+    face_.setExpression(Expression::Happy);
+    face_.setSpeaking(true);
+    led_.setMood(Mood::Warning);
+}
+
+bool BodyController::startWake(String& error)
+{
+    stopAudio();
+    return wake_.start(error);
+}
+
+void BodyController::stopWake()
+{
+    wake_.stop();
 }
 
 const BodyState& BodyController::getState() const
@@ -155,6 +176,11 @@ const AudioState& BodyController::getAudioState() const
 const MicState& BodyController::getMicState() const
 {
     return mic_.getState();
+}
+
+const WakeState& BodyController::getWakeState() const
+{
+    return wake_.getState();
 }
 
 const uint8_t* BodyController::micWavBuffer() const

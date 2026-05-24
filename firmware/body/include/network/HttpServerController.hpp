@@ -19,6 +19,8 @@ public:
 
 private:
     void registerRoutes();
+    void processWakeDetection();
+    void restartWakeDetection();
     bool requireAuth();
     void sendOk(const String& dataJson);
     void sendError(int status, const char* code, const String& message);
@@ -39,6 +41,9 @@ private:
     void handleAudioStop();
     void handleMicStatus();
     void handleMicRecord();
+    void handleWakeStatus();
+    void handleWakeStart();
+    void handleWakeStop();
     void handleEvents();
     void handleLatestEvent();
     void handleClearEvents();
@@ -52,6 +57,12 @@ private:
     DeviceAuth& auth_;
     WebServer server_;
     bool running_ = false;
+    bool wakeUploadInProgress_ = false;
+    uint32_t handledWakeDetectedAtMs_ = 0;
+    uint32_t lastWakeUploadAtMs_ = 0;
+    int lastWakeUploadHttpStatus_ = 0;
+    String lastWakeUploadError_;
+    String lastWakeSpeechResponse_;
 };
 
 }  // namespace stackchan::network
