@@ -22,7 +22,7 @@ The bridge does not handle conversation state, personality, memory, or TTS. It c
 - USB Serial connection to StackChan for serial mode
 - Wi-Fi reachable StackChan for wifi mode
 - StackChan Body Firmware Phase 8 or later for wifi mode
-- speech-services for STT mode
+- stt-adapter for STT mode
 
 ## Setup
 
@@ -74,13 +74,13 @@ STT configuration:
 
 ```yaml
 stt:
-  transcribe_url: "http://<speech-services-lan-ip>:8790/transcribe"
+  transcribe_url: "http://<stt-adapter-lan-ip>:8790/transcribe"
 
 events:
   include_bridge_events: true
 ```
 
-`speech-services` is a separate Python service. Audio sources send audio to `speech-services`; the bridge receives completed STT events.
+`stt-adapter` is a separate Python service. Audio sources send audio to `stt-adapter`; the bridge receives completed STT events.
 
 `config.yaml` is ignored by git because it is local machine configuration.
 
@@ -161,10 +161,10 @@ The smoke test checks:
 - `POST /reset`
 - invalid `/face` values return HTTP 400
 
-When `speech-services` is running and STT is enabled in `config.yaml`, include a sample WAV:
+When `stt-adapter` is running and STT is enabled in `config.yaml`, include a sample WAV:
 
 ```bash
-STACKCHAN_STT_SAMPLE_WAV=/root/workspace/speech-services/sample/jsut-basic5000-4501-16k.wav npm run smoke
+STACKCHAN_STT_SAMPLE_WAV=/root/workspace/stt-adapter/sample/jsut-basic5000-4501-16k.wav npm run smoke
 ```
 
 ## Phase 8 Scope
@@ -239,7 +239,7 @@ npm run device:config -- config.yaml
 
 ```yaml
 stt:
-  transcribe_url: "http://<speech-services-lan-ip>:8790/transcribe"
+  transcribe_url: "http://<stt-adapter-lan-ip>:8790/transcribe"
 ```
 
 To regenerate the token later:
@@ -437,7 +437,7 @@ curl -X POST http://127.0.0.1:8787/play-wav \
 
 ### POST /stt/events
 
-Receive a completed transcription event from `speech-services`. The bridge stores it as the latest STT result and exposes it through `/events`.
+Receive a completed transcription event from `stt-adapter`. The bridge stores it as the latest STT result and exposes it through `/events`.
 
 ```bash
 curl -X POST http://127.0.0.1:8787/stt/events \
@@ -458,7 +458,7 @@ curl -X POST http://127.0.0.1:8787/stt/events \
   }'
 ```
 
-The response includes `processingMs` from `speech-services`.
+The response includes `processingMs` from `stt-adapter`.
 
 ### GET /stt/latest
 
@@ -561,7 +561,7 @@ Implemented:
 
 - removed bridge-side audio upload STT endpoint
 - `POST /stt/events`
-- latest STT event received from `speech-services`
+- latest STT event received from `stt-adapter`
 - `/events` integration for STT input events
 
 Removed:
