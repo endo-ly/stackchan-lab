@@ -484,6 +484,7 @@ JSON フィールド：
 | フィールド | 説明 |
 |---|---|
 | `speechServicesUrl` | STT サービス（stt-adapter）のエンドポイント URL |
+| `wakeAutoStart` | 起動後に Wake Word 待受を自動開始するか |
 
 **エラー**
 

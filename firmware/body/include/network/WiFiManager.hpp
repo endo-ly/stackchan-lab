@@ -13,6 +13,7 @@ struct WiFiConfig {
     String hostname = "stackchan-001";
     String authToken;
     String speechServicesUrl;
+    bool wakeAutoStart = false;
 };
 
 class WiFiManager {
@@ -21,6 +22,8 @@ public:
     bool loadConfig(WiFiConfig& config);
     bool saveConfig(const WiFiConfig& config);
     bool saveSpeechServicesUrl(const String& url);
+    bool saveDeviceConfig(const String& speechServicesUrl, bool wakeAutoStart);
+    bool saveWakeAutoStart(bool enabled);
     bool clearConfig();
     bool connectSaved(uint32_t timeoutMs = 15000);
     bool connect(const WiFiConfig& config, uint32_t timeoutMs = 15000);

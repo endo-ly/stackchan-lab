@@ -3,6 +3,7 @@ import { StackChanSerialClient } from "../serial/StackChanSerialClient.js";
 
 type DeviceConfig = {
   speechServicesUrl: string;
+  wakeAutoStart: boolean;
 };
 
 const configPath = process.env.STACKCHAN_BRIDGE_CONFIG ?? process.argv[2] ?? "config.yaml";
@@ -11,6 +12,7 @@ const config = loadConfig(configPath);
 async function main(): Promise<void> {
   const deviceConfig: DeviceConfig = {
     speechServicesUrl: config.stt.transcribeUrl,
+    wakeAutoStart: config.wake.autoStart,
   };
   const json = JSON.stringify(deviceConfig);
   const payload = Buffer.from(json, "utf8");
@@ -22,6 +24,7 @@ async function main(): Promise<void> {
     console.log("Sending device config");
     console.log(`Payload size: ${payload.length} bytes`);
     console.log(`speechServicesUrl: ${deviceConfig.speechServicesUrl}`);
+    console.log(`wakeAutoStart: ${deviceConfig.wakeAutoStart}`);
 
     const { ready, final } = await client.sendCommandWithBinary(`DEVICE:CONFIG_JSON:${payload.length}`, payload);
     console.log(ready);

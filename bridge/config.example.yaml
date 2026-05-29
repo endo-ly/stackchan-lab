@@ -23,6 +23,9 @@ wifi:
 stt:
   transcribe_url: "http://<stt-adapter-lan-ip>:8790/transcribe"
 
+wake:
+  auto_start: false
+
 events:
   include_bridge_events: true
 

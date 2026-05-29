@@ -32,6 +32,9 @@ type RawConfig = {
   stt?: {
     transcribe_url?: unknown;
   };
+  wake?: {
+    auto_start?: unknown;
+  };
   events?: {
     include_bridge_events?: unknown;
   };
@@ -85,6 +88,9 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
     },
     stt: {
       transcribeUrl: stringValue(raw.stt?.transcribe_url, "http://127.0.0.1:8790/transcribe"),
+    },
+    wake: {
+      autoStart: booleanValue(raw.wake?.auto_start, false, "wake.auto_start"),
     },
     events: {
       includeBridgeEvents: booleanValue(raw.events?.include_bridge_events, true, "events.include_bridge_events"),

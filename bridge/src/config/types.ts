@@ -30,6 +30,9 @@ export type BridgeConfig = {
   stt: {
     transcribeUrl: string;
   };
+  wake: {
+    autoStart: boolean;
+  };
   events: {
     includeBridgeEvents: boolean;
   };

@@ -479,6 +479,7 @@ void HttpServerController::handleWakeStatus()
     doc["modelBytes"] = wake.modelBytes();
     doc["lastProbability"] = wake.lastProbability();
     doc["averageProbability"] = wake.averageProbability();
+    doc["autoStart"] = wifi_.config().wakeAutoStart;
     JsonObject debug = doc["debug"].to<JsonObject>();
     debug["queuedBlocks"] = wake.queuedBlocks();
     debug["processedBlocks"] = wake.processedBlocks();
@@ -526,6 +527,7 @@ void HttpServerController::handleWakeStart()
     if (!requireAuth()) return;
     String error;
     if (!body_.startWake(error)) return sendError(409, error.c_str(), error);
+    if (!wifi_.saveWakeAutoStart(true)) return sendError(500, "DEVICE_CONFIG_SAVE_FAILED", wifi_.state().lastError);
     handleWakeStatus();
 }
 
@@ -533,6 +535,7 @@ void HttpServerController::handleWakeStop()
 {
     if (!requireAuth()) return;
     body_.stopWake();
+    if (!wifi_.saveWakeAutoStart(false)) return sendError(500, "DEVICE_CONFIG_SAVE_FAILED", wifi_.state().lastError);
     handleWakeStatus();
 }
 

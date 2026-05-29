@@ -11,6 +11,7 @@ constexpr const char* kPasswordKey = "password";
 constexpr const char* kHostnameKey = "hostname";
 constexpr const char* kAuthTokenKey = "auth_token";
 constexpr const char* kSpeechServicesUrlKey = "speech_url";
+constexpr const char* kWakeAutoStartKey = "wake_auto_start";
 
 }  // namespace
 
@@ -31,6 +32,7 @@ bool WiFiManager::loadConfig(WiFiConfig& config)
     config.hostname = preferences_.getString(kHostnameKey, "stackchan-001");
     config.authToken = preferences_.getString(kAuthTokenKey, "");
     config.speechServicesUrl = preferences_.getString(kSpeechServicesUrlKey, "");
+    config.wakeAutoStart = preferences_.getBool(kWakeAutoStartKey, false);
     preferences_.end();
     return config.ssid.length() > 0;
 }
@@ -46,15 +48,18 @@ bool WiFiManager::saveConfig(const WiFiConfig& config)
         return false;
     }
     const String existingSpeechServicesUrl = preferences_.getString(kSpeechServicesUrlKey, "");
+    const bool existingWakeAutoStart = preferences_.getBool(kWakeAutoStartKey, false);
     const bool ok = preferences_.putString(kSsidKey, config.ssid) > 0
         && preferences_.putString(kPasswordKey, config.password) == config.password.length()
         && preferences_.putString(kHostnameKey, config.hostname) > 0
         && preferences_.putString(kAuthTokenKey, config.authToken) == config.authToken.length()
-        && preferences_.putString(kSpeechServicesUrlKey, existingSpeechServicesUrl) == existingSpeechServicesUrl.length();
+        && preferences_.putString(kSpeechServicesUrlKey, existingSpeechServicesUrl) == existingSpeechServicesUrl.length()
+        && preferences_.putBool(kWakeAutoStartKey, existingWakeAutoStart);
     preferences_.end();
     if (ok) {
         config_ = config;
         config_.speechServicesUrl = existingSpeechServicesUrl;
+        config_.wakeAutoStart = existingWakeAutoStart;
         state_.hostname = config.hostname;
         state_.authEnabled = config.authToken.length() > 0;
         state_.lastError = "";
@@ -66,7 +71,12 @@ bool WiFiManager::saveConfig(const WiFiConfig& config)
 
 bool WiFiManager::saveSpeechServicesUrl(const String& url)
 {
-    if (url.length() == 0) {
+    return saveDeviceConfig(url, config_.wakeAutoStart);
+}
+
+bool WiFiManager::saveDeviceConfig(const String& speechServicesUrl, bool wakeAutoStart)
+{
+    if (speechServicesUrl.length() == 0) {
         state_.lastError = "invalid_speech_services_url";
         return false;
     }
@@ -74,10 +84,29 @@ bool WiFiManager::saveSpeechServicesUrl(const String& url)
         state_.lastError = "preferences_open_failed";
         return false;
     }
-    const bool ok = preferences_.putString(kSpeechServicesUrlKey, url) == url.length();
+    const bool ok = preferences_.putString(kSpeechServicesUrlKey, speechServicesUrl) == speechServicesUrl.length()
+        && preferences_.putBool(kWakeAutoStartKey, wakeAutoStart);
     preferences_.end();
     if (ok) {
-        config_.speechServicesUrl = url;
+        config_.speechServicesUrl = speechServicesUrl;
+        config_.wakeAutoStart = wakeAutoStart;
+        state_.lastError = "";
+    } else {
+        state_.lastError = "save_failed";
+    }
+    return ok;
+}
+
+bool WiFiManager::saveWakeAutoStart(bool enabled)
+{
+    if (!preferences_.begin(kNamespace, false)) {
+        state_.lastError = "preferences_open_failed";
+        return false;
+    }
+    const bool ok = preferences_.putBool(kWakeAutoStartKey, enabled);
+    preferences_.end();
+    if (ok) {
+        config_.wakeAutoStart = enabled;
         state_.lastError = "";
     } else {
         state_.lastError = "save_failed";

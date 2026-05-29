@@ -206,7 +206,7 @@ stt-adapter → Bridge /stt/events → 外部システム
 
 ### 状態管理
 
-`POST /wake/start` 後は基本的に待受状態が継続します。
+`POST /wake/start` 後は基本的に待受状態が継続します。`/wake/start` は `wakeAutoStart=true` を永続保存し、次回起動後も Wi-Fi 接続と `speechServicesUrl` 設定が揃っていれば自動で待受を開始します。`/wake/stop` は `wakeAutoStart=false` を保存します。
 
 ```text
 Idle → Detecting → WakeDetected → RecordingCommand → Uploading → Detecting

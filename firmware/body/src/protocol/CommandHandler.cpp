@@ -200,7 +200,8 @@ String CommandHandler::completeDeviceConfigJsonTransfer(const String& json)
     if (speechServicesUrl.length() == 0) {
         return "ERR DEVICE_CONFIG_JSON_INVALID";
     }
-    if (!network_->wifi().saveSpeechServicesUrl(speechServicesUrl)) {
+    const bool wakeAutoStart = doc["wakeAutoStart"] | network_->wifi().config().wakeAutoStart;
+    if (!network_->wifi().saveDeviceConfig(speechServicesUrl, wakeAutoStart)) {
         return "ERR DEVICE_CONFIG_SAVE_FAILED";
     }
     return "OK DEVICE CONFIG";
