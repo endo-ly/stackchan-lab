@@ -24,6 +24,7 @@ void AudioController::begin()
 {
     M5.Speaker.begin();
     M5.Speaker.setVolume(state_.volume());
+    M5.Speaker.setAllChannelVolume(255);
     state_.setState(AudioPlaybackState::Idle);
     state_.setPlaying(false);
 }
@@ -91,7 +92,9 @@ bool AudioController::playWav(uint8_t* buffer, size_t size, String& error)
         return false;
     }
 
+    M5.Speaker.begin();
     M5.Speaker.setVolume(state_.volume());
+    M5.Speaker.setAllChannelVolume(255);
     if (!M5.Speaker.playWav(buffer, size, 1, 0, true)) {
         error = "AUDIO_INVALID_FORMAT";
         state_.setState(AudioPlaybackState::Error);

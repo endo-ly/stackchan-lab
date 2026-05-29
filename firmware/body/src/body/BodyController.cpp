@@ -18,9 +18,9 @@ void BodyController::begin()
 
     display_.begin();
     display_.showBoot();
-    audio_.begin();
     mic_.begin();
     wake_.begin();
+    audio_.begin();
     input_.begin();
     led_.begin();
     motion_.begin(state_);
