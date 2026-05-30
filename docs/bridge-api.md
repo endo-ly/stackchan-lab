@@ -443,8 +443,8 @@ curl -X POST http://127.0.0.1:8787/play-wav \
 **対応 WAV 形式**
 
 - PCM / mono / 16-bit
-- 16000Hz または 24000Hz
-- 最大 1MB（Bridge 側でチェック）
+- 任意の有効サンプルレート（16000Hz、24000Hz、44100Hz 等）
+- 最大 1MB（Firmware 側でチェック）
 
 **Response 200**
 

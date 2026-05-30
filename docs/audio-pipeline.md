@@ -48,14 +48,14 @@
 
 ```text
 TTS エンジン
-  │ テキスト → WAV（PCM 16kHz mono 16bit）
+  │ テキスト → WAV（PCM mono 16bit、任意の有効サンプルレート）
   ▼
-Bridge  POST /play-wav（multipart/form-data）
-  │ WAV バリデーション（形式・サイズ）
-  │ Firmware へ転送
+外部システム / curl
+  │ POST /play-wav（WAV バイナリ直接送信）
   ▼
 Firmware  AudioController
-  │ WAV 受信 → バッファリング
+  │ WAV 受信 → 独自パーサで PCM 抽出
+  │ playRaw() で直接再生（M5Unified 内部 WAV パーサをバイパス）
   │ 再生開始 → 口パク開始（speaking 状態）
   │ 再生完了 → Idle に戻る
   ▼
@@ -69,8 +69,8 @@ Firmware  AudioController
 | コーデック | PCM（非圧縮） |
 | チャンネル | モノラル |
 | ビット深度 | 16-bit |
-| サンプルレート | 16000Hz または 24000Hz |
-| 最大サイズ | 1MB（Bridge 側でチェック） |
+| サンプルレート | 任意の有効レート（16000Hz、24000Hz、44100Hz 等） |
+| 最大サイズ | 1MB（Firmware 側でチェック） |
 
 ### 状態遷移
 
