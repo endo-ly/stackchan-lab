@@ -87,7 +87,7 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
       healthCheckIntervalMs: numberValue(raw.wifi?.health_check_interval_ms, 5000, "wifi.health_check_interval_ms"),
     },
     stt: {
-      transcribeUrl: stringValue(raw.stt?.transcribe_url, "http://127.0.0.1:8790/transcribe"),
+      transcribeUrl: stringValue(raw.stt?.transcribe_url, "http://127.0.0.1:8012/v1/transcribe"),
     },
     wake: {
       autoStart: booleanValue(raw.wake?.auto_start, false, "wake.auto_start"),

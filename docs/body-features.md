@@ -235,7 +235,7 @@ curl -X POST http://127.0.0.1:8787/events/clear
 
 ### STT イベントとの統合
 
-`events.include_bridge_events: true` の場合、`stt-adapter` からの STT 結果も `/events` のレスポンスに含まれます。STT イベントの詳細は [audio-pipeline.md](audio-pipeline.md) を参照。
+`events.include_bridge_events: true` の場合、voice-gateway からの STT 結果も `/events` のレスポンスに含まれます。STT イベントの詳細は [audio-pipeline.md](audio-pipeline.md) を参照。
 
 ---
 

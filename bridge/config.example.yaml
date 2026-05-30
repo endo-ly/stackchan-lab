@@ -21,7 +21,10 @@ wifi:
   health_check_interval_ms: 5000
 
 stt:
-  transcribe_url: "http://<stt-adapter-lan-ip>:8790/transcribe"
+  # voice-gateway の /v1/transcribe エンドポイント
+  # StackChan 本体から録音WAVが直接アップロードされる先
+  # 例: "http://192.168.0.210:8012/v1/transcribe"
+  transcribe_url: "http://<voice-gateway>:8012/v1/transcribe"
 
 wake:
   auto_start: false

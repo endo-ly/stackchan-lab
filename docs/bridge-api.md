@@ -81,7 +81,7 @@ Bridge の概要・起動方法については [bridge/README.md](../bridge/READ
 | メソッド | パス | 説明 |
 |---|---|---|
 | `GET` | `/stt/latest` | 最新の STT 結果 |
-| `POST` | `/stt/events` | stt-adapter からの転写完了イベント受信 |
+| `POST` | `/stt/events` | voice-gateway からの転写完了イベント受信 |
 
 ---
 
@@ -650,7 +650,7 @@ curl http://127.0.0.1:8787/stt/latest
 
 ### POST /stt/events
 
-外部の `stt-adapter` から転写完了イベントを受け取るエンドポイント。Bridge はこの結果を `/stt/latest` と `/events` に反映します。
+外部の voice-gateway から転写完了イベントを受け取るエンドポイント。Bridge はこの結果を `/stt/latest` と `/events` に反映します。
 
 ```bash
 curl -X POST http://127.0.0.1:8787/stt/events \
@@ -762,9 +762,8 @@ wifi:
 
 # === STT 連携（任意） ===
 stt:
-  transcribe_url: "http://<ip>:8790/transcribe"  # stt-adapter のエンドポイント
+  transcribe_url: "http://<voice-gateway>:8012/v1/transcribe"  # voice-gateway エンドポイント
 
-# === イベント ===
 events:
   include_bridge_events: true  # Bridge 側イベントを /events に含めるか
 

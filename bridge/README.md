@@ -70,11 +70,11 @@ wifi:
 
 **STT 連携（任意）**:
 
-外部の `stt-adapter` を使用する場合:
+外部の `voice-gateway` を使用する場合:
 
 ```yaml
 stt:
-  transcribe_url: "http://<stt-adapterのIP>:8790/transcribe"
+  transcribe_url: "http://<voice-gateway>:8012/v1/transcribe"
 
 events:
   include_bridge_events: true
@@ -147,7 +147,7 @@ main.ts
 ### アーキテクチャ上の制約
 
 - TTS は行わない（外部システムの責務）
-- STT 推論は行わない（外部 stt-adapter の責務）
+- STT 推論は行わない（外部 voice-gateway の責務）
 - WebSocket / SSE は未実装
 - 認証・HTTPS は未実装（LAN 内利用前提）
 - 会話状態・長期記憶は持たない
