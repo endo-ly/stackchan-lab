@@ -118,7 +118,7 @@ bool BodyController::queuePreparedWav(size_t size, String& error)
     return true;
 }
 
-bool BodyController::enterPlaybackMode(uint32_t sampleRate)
+bool BodyController::enterPlaybackMode()
 {
     Serial.println("[BODY] enterPlaybackMode");
     logHardwareState("before");
@@ -141,13 +141,8 @@ bool BodyController::enterPlaybackMode(uint32_t sampleRate)
     mic_.end();
     Serial.println("[BODY] mic ended");
 
-    bool ok = true;
-    if (sampleRate > 0) {
-        ok = audio_.rebeginSpeakerForWav(sampleRate);
-    }
-
-    if (!ok) {
-        Serial.println("[BODY][WARN] speaker rebegin failed");
+    if (!audio_.beginSpeaker()) {
+        Serial.println("[BODY][WARN] speaker begin failed");
         mic_.begin();
         wakePausedForAudio_ = false;
         return false;
@@ -183,8 +178,7 @@ void BodyController::processAudioQueue()
     const AudioState& audioState = audio_.getState();
     if (audioState.isQueued()) {
         String error;
-        const uint32_t rate = audio_.preparedSampleRate();
-        if (!enterPlaybackMode(rate)) {
+        if (!enterPlaybackMode()) {
             audio_.stop();
             face_.setSpeaking(false);
             face_.setMouthOpen(false);

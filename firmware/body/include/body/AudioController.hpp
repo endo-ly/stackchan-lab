@@ -29,18 +29,23 @@ public:
     void stop();
     bool setVolume(int volume);
 
-    bool rebeginSpeakerForWav(uint32_t sampleRate);
+    bool beginSpeaker();
     void logHardwareState(const char* label) const;
-    uint32_t extractSampleRate(const uint8_t* buffer, size_t size) const;
-
-    uint32_t preparedSampleRate() const;
 
     bool isPlaying() const;
     const AudioState& getState() const;
 
 private:
-    bool validateWav(const uint8_t* buffer, size_t size) const;
-    uint32_t estimateWavDurationMs(const uint8_t* buffer, size_t size) const;
+    struct ParsedWav {
+        size_t dataOffset = 0;
+        size_t dataSize = 0;
+        uint32_t sampleRate = 0;
+        uint16_t channels = 0;
+        uint16_t bitsPerSample = 0;
+    };
+
+    bool parseWavPcm16Mono(const uint8_t* buffer, size_t size, ParsedWav& out) const;
+    int16_t maxAbsFirstSamples(const int16_t* pcm, size_t samples, size_t maxCount) const;
     void releaseBuffer();
 
     AudioMode mode_ = AudioMode::Idle;
@@ -48,6 +53,8 @@ private:
     uint8_t* wavBuffer_ = nullptr;
     uint32_t expectedDurationMs_ = 0;
     uint32_t wavSampleRate_ = 0;
+    size_t parsedPcmOffset_ = 0;
+    size_t parsedPcmBytes_ = 0;
 };
 
 }  // namespace stackchan

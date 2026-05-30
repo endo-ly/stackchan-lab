@@ -27,8 +27,6 @@ void AudioController::begin()
     config.dma_buf_len = 1024;
     config.dma_buf_count = 8;
     M5.Speaker.config(config);
-    // Speaker is NOT begin()-ed here; it will be lazily initialized
-    // in rebeginSpeakerForWav() right before playback.
     M5.Speaker.setVolume(state_.volume());
     M5.Speaker.setAllChannelVolume(255);
     state_.setState(AudioPlaybackState::Idle);
@@ -36,6 +34,8 @@ void AudioController::begin()
     state_.setQueued(false);
     expectedDurationMs_ = 0;
     wavSampleRate_ = 0;
+    parsedPcmOffset_ = 0;
+    parsedPcmBytes_ = 0;
     Serial.println("[AUDIO] begin done (lazy init)");
 }
 
@@ -58,6 +58,8 @@ void AudioController::update()
             state_.setPlaying(false);
             state_.setState(AudioPlaybackState::Finished);
             state_.markFinished(millis());
+            parsedPcmOffset_ = 0;
+            parsedPcmBytes_ = 0;
             releaseBuffer();
         }
     }
@@ -108,6 +110,73 @@ uint8_t* AudioController::preparedBuffer()
     return wavBuffer_;
 }
 
+bool AudioController::parseWavPcm16Mono(const uint8_t* buffer, size_t size, ParsedWav& out) const
+{
+    out = ParsedWav{};
+
+    if (buffer == nullptr || size < 44) {
+        return false;
+    }
+    if (memcmp(buffer, "RIFF", 4) != 0 || memcmp(buffer + 8, "WAVE", 4) != 0) {
+        return false;
+    }
+
+    size_t offset = 12;
+    bool foundFmt = false;
+    bool foundData = false;
+    uint16_t audioFormat = 0;
+
+    while (offset + 8 <= size) {
+        const uint8_t* chunk = buffer + offset;
+        const uint32_t chunkSize = readLe32(chunk + 4);
+        const size_t dataOffset = offset + 8;
+        if (dataOffset + chunkSize > size) {
+            return false;
+        }
+
+        if (memcmp(chunk, "fmt ", 4) == 0) {
+            if (chunkSize < 16) {
+                return false;
+            }
+            audioFormat = readLe16(buffer + dataOffset);
+            out.bitsPerSample = readLe16(buffer + dataOffset + 14);
+            out.channels = readLe16(buffer + dataOffset + 2);
+            out.sampleRate = readLe32(buffer + dataOffset + 4);
+            foundFmt = true;
+        } else if (memcmp(chunk, "data", 4) == 0) {
+            out.dataOffset = dataOffset;
+            out.dataSize = chunkSize;
+            foundData = chunkSize > 0;
+        }
+
+        offset = dataOffset + chunkSize + (chunkSize % 2);
+    }
+
+    if (!foundFmt || !foundData) {
+        return false;
+    }
+    if (audioFormat != 1) {
+        return false;
+    }
+    if (out.bitsPerSample != 16) {
+        return false;
+    }
+    if (out.channels != 1) {
+        return false;
+    }
+    if (out.sampleRate == 0) {
+        return false;
+    }
+    if (out.dataSize == 0 || out.dataSize % sizeof(int16_t) != 0) {
+        return false;
+    }
+    if (out.dataOffset + out.dataSize > size) {
+        return false;
+    }
+
+    return true;
+}
+
 bool AudioController::queuePlayWav(uint8_t* buffer, size_t size, String& error)
 {
     if (buffer == nullptr || buffer != wavBuffer_ || size != state_.currentSize()) {
@@ -118,7 +187,8 @@ bool AudioController::queuePlayWav(uint8_t* buffer, size_t size, String& error)
     }
     state_.setReceivedSize(size);
 
-    if (!validateWav(buffer, size)) {
+    ParsedWav parsed;
+    if (!parseWavPcm16Mono(buffer, size, parsed)) {
         error = "AUDIO_INVALID_FORMAT";
         state_.setState(AudioPlaybackState::Error);
         state_.setError(error);
@@ -126,12 +196,30 @@ bool AudioController::queuePlayWav(uint8_t* buffer, size_t size, String& error)
         return false;
     }
 
-    wavSampleRate_ = extractSampleRate(buffer, size);
-    expectedDurationMs_ = estimateWavDurationMs(buffer, size);
+    wavSampleRate_ = parsed.sampleRate;
+    parsedPcmOffset_ = parsed.dataOffset;
+    parsedPcmBytes_ = parsed.dataSize;
+    expectedDurationMs_ = static_cast<uint32_t>((parsed.dataSize * 1000ULL) / (parsed.sampleRate * sizeof(int16_t)));
 
     state_.setState(AudioPlaybackState::Queued);
     state_.setQueued(true);
     return true;
+}
+
+int16_t AudioController::maxAbsFirstSamples(const int16_t* pcm, size_t samples, size_t maxCount) const
+{
+    if (pcm == nullptr || samples == 0) {
+        return 0;
+    }
+    const size_t n = (samples < maxCount) ? samples : maxCount;
+    int16_t maxAbs = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const int16_t v = (pcm[i] >= 0) ? pcm[i] : static_cast<int16_t>(-pcm[i]);
+        if (v > maxAbs) {
+            maxAbs = v;
+        }
+    }
+    return maxAbs;
 }
 
 bool AudioController::startQueuedPlay(String& error)
@@ -149,15 +237,54 @@ bool AudioController::startQueuedPlay(String& error)
         return false;
     }
 
-    const size_t size = state_.receivedSize();
-
-    logHardwareState("before playWav");
-
-    if (!M5.Speaker.playWav(wavBuffer_, size, 1, -1, true)) {
-        error = "AUDIO_INVALID_FORMAT";
+    if (parsedPcmBytes_ == 0 || wavSampleRate_ == 0) {
+        error = "AUDIO_INVALID_PCM";
         state_.setState(AudioPlaybackState::Error);
         state_.setError(error);
         state_.setQueued(false);
+        releaseBuffer();
+        return false;
+    }
+
+    const int16_t* pcm = reinterpret_cast<const int16_t*>(wavBuffer_ + parsedPcmOffset_);
+    const size_t samples = parsedPcmBytes_ / sizeof(int16_t);
+    const int16_t maxAbs = maxAbsFirstSamples(pcm, samples, 512);
+
+    Serial.printf(
+        "[AUDIO] playRaw PCM: rate=%u offset=%u bytes=%u samples=%u first=%d maxAbs=%d\n",
+        wavSampleRate_,
+        static_cast<unsigned>(parsedPcmOffset_),
+        static_cast<unsigned>(parsedPcmBytes_),
+        static_cast<unsigned>(samples),
+        samples > 0 ? pcm[0] : 0,
+        maxAbs
+    );
+
+    logHardwareState("before playRaw");
+
+    const bool ok = M5.Speaker.playRaw(
+        pcm,
+        samples,
+        wavSampleRate_,
+        false,
+        1,
+        0,
+        true
+    );
+
+    Serial.printf(
+        "[AUDIO] after playRaw: ok=%d spkPlaying=%d channels=%u\n",
+        ok,
+        M5.Speaker.isPlaying(),
+        M5.Speaker.getPlayingChannels()
+    );
+
+    if (!ok) {
+        error = "AUDIO_PLAY_RAW_FAILED";
+        state_.setPlaying(false);
+        state_.setQueued(false);
+        state_.setState(AudioPlaybackState::Error);
+        state_.setError(error);
         releaseBuffer();
         return false;
     }
@@ -168,13 +295,14 @@ bool AudioController::startQueuedPlay(String& error)
     state_.markStarted(millis());
     state_.clearError();
     setMode(AudioMode::Playback);
-    logHardwareState("after playWav");
+
+    logHardwareState("after playRaw");
     return true;
 }
 
-bool AudioController::rebeginSpeakerForWav(uint32_t sampleRate)
+bool AudioController::beginSpeaker()
 {
-    Serial.println("[AUDIO] rebeginSpeakerForWav: stop + config + begin");
+    Serial.println("[AUDIO] beginSpeaker: stop + config + begin");
 
     if (M5.Speaker.isPlaying()) {
         Serial.println("[AUDIO] speaker still playing, stopping first");
@@ -183,7 +311,7 @@ bool AudioController::rebeginSpeakerForWav(uint32_t sampleRate)
     }
 
     auto config = M5.Speaker.config();
-    config.sample_rate = sampleRate > 0 ? sampleRate : 24000;
+    config.sample_rate = 48000;
     config.dma_buf_len = 1024;
     config.dma_buf_count = 8;
     M5.Speaker.config(config);
@@ -193,7 +321,7 @@ bool AudioController::rebeginSpeakerForWav(uint32_t sampleRate)
     M5.Speaker.setVolume(state_.volume());
     M5.Speaker.setAllChannelVolume(255);
 
-    logHardwareState("after rebegin (config + begin)");
+    logHardwareState("after beginSpeaker (config + begin)");
     return ok && M5.Speaker.isEnabled() && M5.Speaker.isRunning();
 }
 
@@ -211,11 +339,6 @@ void AudioController::logHardwareState(const char* label) const
     );
 }
 
-uint32_t AudioController::preparedSampleRate() const
-{
-    return wavSampleRate_;
-}
-
 void AudioController::stop()
 {
     M5.Speaker.stop();
@@ -226,6 +349,8 @@ void AudioController::stop()
     state_.setReceivedSize(0);
     expectedDurationMs_ = 0;
     wavSampleRate_ = 0;
+    parsedPcmOffset_ = 0;
+    parsedPcmBytes_ = 0;
     state_.markFinished(millis());
     releaseBuffer();
     setMode(AudioMode::Idle);
@@ -249,118 +374,6 @@ bool AudioController::isPlaying() const
 const AudioState& AudioController::getState() const
 {
     return state_;
-}
-
-bool AudioController::validateWav(const uint8_t* buffer, size_t size) const
-{
-    if (buffer == nullptr || size < 44) {
-        return false;
-    }
-    if (memcmp(buffer, "RIFF", 4) != 0 || memcmp(buffer + 8, "WAVE", 4) != 0) {
-        return false;
-    }
-
-    size_t offset = 12;
-    bool foundFmt = false;
-    bool foundData = false;
-    uint16_t audioFormat = 0;
-    uint16_t channels = 0;
-    uint32_t sampleRate = 0;
-    uint16_t bitsPerSample = 0;
-
-    while (offset + 8 <= size) {
-        const uint8_t* chunk = buffer + offset;
-        const uint32_t chunkSize = readLe32(chunk + 4);
-        const size_t dataOffset = offset + 8;
-        if (dataOffset + chunkSize > size) {
-            return false;
-        }
-
-        if (memcmp(chunk, "fmt ", 4) == 0) {
-            if (chunkSize < 16) {
-                return false;
-            }
-            audioFormat = readLe16(buffer + dataOffset);
-            channels = readLe16(buffer + dataOffset + 2);
-            sampleRate = readLe32(buffer + dataOffset + 4);
-            bitsPerSample = readLe16(buffer + dataOffset + 14);
-            foundFmt = true;
-        } else if (memcmp(chunk, "data", 4) == 0) {
-            foundData = chunkSize > 0;
-        }
-
-        offset = dataOffset + chunkSize + (chunkSize % 2);
-    }
-
-    return foundFmt
-        && foundData
-        && audioFormat == 1
-        && channels == 1
-        && (sampleRate == 16000 || sampleRate == 24000)
-        && bitsPerSample == 16;
-}
-
-uint32_t AudioController::extractSampleRate(const uint8_t* buffer, size_t size) const
-{
-    if (buffer == nullptr || size < 44) {
-        return 0;
-    }
-
-    size_t offset = 12;
-    while (offset + 8 <= size) {
-        const uint8_t* chunk = buffer + offset;
-        const uint32_t chunkSize = readLe32(chunk + 4);
-        const size_t dataOffset = offset + 8;
-        if (dataOffset + chunkSize > size) {
-            return 0;
-        }
-
-        if (memcmp(chunk, "fmt ", 4) == 0 && chunkSize >= 16) {
-            return readLe32(buffer + dataOffset + 4);
-        }
-
-        offset = dataOffset + chunkSize + (chunkSize % 2);
-    }
-    return 0;
-}
-
-uint32_t AudioController::estimateWavDurationMs(const uint8_t* buffer, size_t size) const
-{
-    if (buffer == nullptr || size < 44) {
-        return 0;
-    }
-
-    size_t offset = 12;
-    uint32_t sampleRate = 0;
-    uint16_t channels = 0;
-    uint16_t bitsPerSample = 0;
-    uint32_t dataSize = 0;
-
-    while (offset + 8 <= size) {
-        const uint8_t* chunk = buffer + offset;
-        const uint32_t chunkSize = readLe32(chunk + 4);
-        const size_t dataOffset = offset + 8;
-        if (dataOffset + chunkSize > size) {
-            return 0;
-        }
-
-        if (memcmp(chunk, "fmt ", 4) == 0 && chunkSize >= 16) {
-            channels = readLe16(buffer + dataOffset + 2);
-            sampleRate = readLe32(buffer + dataOffset + 4);
-            bitsPerSample = readLe16(buffer + dataOffset + 14);
-        } else if (memcmp(chunk, "data", 4) == 0) {
-            dataSize = chunkSize;
-        }
-
-        offset = dataOffset + chunkSize + (chunkSize % 2);
-    }
-
-    if (sampleRate == 0 || channels == 0 || bitsPerSample == 0 || dataSize == 0) {
-        return 0;
-    }
-
-    const uint32_t bytesPerSecond = sampleRate * channels * (bitsPerSample / 8);
-    return (dataSize * 1000ULL) / bytesPerSecond;
 }
 
 void AudioController::releaseBuffer()

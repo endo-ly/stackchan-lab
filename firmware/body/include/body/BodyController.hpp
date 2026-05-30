@@ -34,7 +34,7 @@ public:
     bool startWake(String& error);
     void stopWake();
 
-    bool enterPlaybackMode(uint32_t sampleRate);
+    bool enterPlaybackMode();
     void leavePlaybackMode();
 
     const BodyState& getState() const;
