@@ -15,6 +15,8 @@ void AudioState::setState(AudioPlaybackState state) { state_ = state; }
 void AudioState::setVolume(uint8_t volume) { volume_ = volume; }
 void AudioState::setPlaying(bool playing) { isPlaying_ = playing; }
 void AudioState::setCurrentSize(size_t size) { currentSize_ = size; }
+void AudioState::setQueued(bool queued) { isQueued_ = queued; }
+bool AudioState::isQueued() const { return isQueued_; }
 void AudioState::setReceivedSize(size_t size) { receivedSize_ = size; }
 void AudioState::markStarted(uint32_t now) { startedAt_ = now; }
 void AudioState::markFinished(uint32_t now) { finishedAt_ = now; }
@@ -28,6 +30,8 @@ const char* toString(AudioPlaybackState state)
             return "Idle";
         case AudioPlaybackState::Receiving:
             return "Receiving";
+        case AudioPlaybackState::Queued:
+            return "Queued";
         case AudioPlaybackState::Playing:
             return "Playing";
         case AudioPlaybackState::Finished:

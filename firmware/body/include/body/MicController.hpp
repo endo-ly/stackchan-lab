@@ -14,6 +14,7 @@ constexpr uint32_t kMaxMicRecordMs = 5000;
 class MicController {
 public:
     void begin();
+    void end();
 
     bool recordWav(uint32_t durationMs, String& error);
     const MicState& getState() const;

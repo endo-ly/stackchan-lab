@@ -36,6 +36,7 @@ private:
     void handleMove();
     void handleReset();
     void handlePlayWav();
+    void handlePlayWavBody();
     void handleAudioStatus();
     void handleAudioVolume();
     void handleAudioStop();
@@ -63,6 +64,9 @@ private:
     int lastWakeUploadHttpStatus_ = 0;
     String lastWakeUploadError_;
     String lastWakeSpeechResponse_;
+    uint8_t* wavBodyBuffer_ = nullptr;
+    size_t wavBodySize_ = 0;
+    String wavBodyError_;
 };
 
 }  // namespace stackchan::network

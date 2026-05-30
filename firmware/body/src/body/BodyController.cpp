@@ -18,9 +18,9 @@ void BodyController::begin()
 
     display_.begin();
     display_.showBoot();
+    audio_.begin();
     mic_.begin();
     wake_.begin();
-    audio_.begin();
     input_.begin();
     led_.begin();
     motion_.begin(state_);
@@ -46,6 +46,18 @@ void BodyController::update()
         face_.setSpeaking(false);
         face_.setMouthOpen(false);
         led_.setMood(state_.mood());
+    }
+    if (wakePausedForAudio_ && !audio_.isPlaying()) {
+        face_.setSpeaking(false);
+        face_.setMouthOpen(false);
+        led_.setMood(state_.mood());
+        wakePausedForAudio_ = false;
+        mic_.begin();
+        String wakeError;
+        if (!wake_.start(wakeError)) {
+            Serial.print("[BODY][WARN] wake restart after audio failed: ");
+            Serial.println(wakeError);
+        }
     }
     input_.update();
     face_.update();
@@ -105,9 +117,9 @@ uint8_t* BodyController::wavReceiveBuffer()
     return audio_.preparedBuffer();
 }
 
-bool BodyController::playPreparedWav(size_t size, String& error)
+bool BodyController::queuePreparedWav(size_t size, String& error)
 {
-    const bool ok = audio_.playWav(audio_.preparedBuffer(), size, error);
+    const bool ok = audio_.queuePlayWav(audio_.preparedBuffer(), size, error);
     if (!ok) {
         return false;
     }
@@ -115,6 +127,88 @@ bool BodyController::playPreparedWav(size_t size, String& error)
     face_.setSpeaking(true);
     led_.setMood(Mood::Speaking);
     return true;
+}
+
+bool BodyController::enterPlaybackMode(uint32_t sampleRate)
+{
+    Serial.println("[BODY] enterPlaybackMode");
+    logHardwareState("before");
+
+    wakePausedForAudio_ = wake_.getState().running();
+    if (wakePausedForAudio_) {
+        Serial.println("[BODY] stopping wake");
+        wake_.stop();
+    }
+
+    const uint32_t deadline = millis() + 1000;
+    while (M5.Mic.isRecording() && millis() < deadline) {
+        delay(10);
+    }
+    if (M5.Mic.isRecording()) {
+        Serial.println("[BODY][WARN] mic still recording, abort");
+        return false;
+    }
+
+    mic_.end();
+    Serial.println("[BODY] mic ended");
+
+    bool ok = true;
+    if (sampleRate > 0) {
+        ok = audio_.rebeginSpeakerForWav(sampleRate);
+    }
+
+    if (!ok) {
+        Serial.println("[BODY][WARN] speaker rebegin failed");
+        mic_.begin();
+        wakePausedForAudio_ = false;
+        return false;
+    }
+
+    logHardwareState("after");
+    return true;
+}
+
+void BodyController::leavePlaybackMode()
+{
+    Serial.println("[BODY] leavePlaybackMode");
+    logHardwareState("before");
+
+    if (wakePausedForAudio_) {
+        wakePausedForAudio_ = false;
+        mic_.begin();
+        String wakeError;
+        if (!wake_.start(wakeError)) {
+            Serial.print("[BODY][WARN] wake restart failed: ");
+            Serial.println(wakeError);
+        }
+    }
+
+    logHardwareState("after");
+}
+
+void BodyController::processAudioQueue()
+{
+    const AudioState& audioState = audio_.getState();
+    if (audioState.isQueued()) {
+        String error;
+        const uint32_t rate = audio_.preparedSampleRate();
+        if (!enterPlaybackMode(rate)) {
+            audio_.stop();
+            face_.setSpeaking(false);
+            face_.setMouthOpen(false);
+            led_.setMood(state_.mood());
+            return;
+        }
+
+        if (!audio_.startQueuedPlay(error)) {
+            Serial.print("[BODY][WARN] audio playback start failed: ");
+            Serial.println(error);
+            leavePlaybackMode();
+            face_.setSpeaking(false);
+            face_.setMouthOpen(false);
+            led_.setMood(state_.mood());
+        }
+    }
 }
 
 void BodyController::stopAudio()
@@ -134,6 +228,7 @@ bool BodyController::recordMicWav(uint32_t durationMs, String& error)
 {
     stopWake();
     stopAudio();
+    mic_.begin();
     led_.setMood(Mood::Active);
     const bool ok = mic_.recordWav(durationMs, error);
     led_.setMood(state_.mood());
@@ -209,6 +304,20 @@ InputController& BodyController::input()
 const InputController& BodyController::input() const
 {
     return input_;
+}
+
+void BodyController::logHardwareState(const char* label) const
+{
+    Serial.printf(
+        "[BODY] %s: spk enabled=%d running=%d playing=%d | mic enabled=%d running=%d recording=%d\n",
+        label,
+        M5.Speaker.isEnabled(),
+        M5.Speaker.isRunning(),
+        M5.Speaker.isPlaying(),
+        M5.Mic.isEnabled(),
+        M5.Mic.isRunning(),
+        M5.Mic.isRecording()
+    );
 }
 
 void BodyController::logState() const

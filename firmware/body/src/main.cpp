@@ -23,6 +23,7 @@ void setup()
 void loop()
 {
     body.update();
+    body.processAudioQueue();
     network.update();
     protocol.update();
     delay(50);

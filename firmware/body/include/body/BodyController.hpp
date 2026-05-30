@@ -24,7 +24,8 @@ public:
     void showStatus();
     bool prepareWav(size_t size, String& error);
     uint8_t* wavReceiveBuffer();
-    bool playPreparedWav(size_t size, String& error);
+    bool queuePreparedWav(size_t size, String& error);
+    void processAudioQueue();
     void stopAudio();
     bool setAudioVolume(int volume);
     bool recordMicWav(uint32_t durationMs, String& error);
@@ -32,6 +33,9 @@ public:
     void clearWakeDetected();
     bool startWake(String& error);
     void stopWake();
+
+    bool enterPlaybackMode(uint32_t sampleRate);
+    void leavePlaybackMode();
 
     const BodyState& getState() const;
     const FaceState& getFaceState() const;
@@ -45,6 +49,7 @@ public:
 
 private:
     void logState() const;
+    void logHardwareState(const char* label) const;
 
     BodyState state_;
     DisplayController display_;
@@ -55,6 +60,7 @@ private:
     LedController led_;
     MotionController motion_;
     WakeController wake_;
+    bool wakePausedForAudio_ = false;
 };
 
 }  // namespace stackchan

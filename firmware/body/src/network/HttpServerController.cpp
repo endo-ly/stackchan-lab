@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <WiFiClient.h>
 
+#include "body/AudioController.hpp"
 #include "protocol/ProtocolTypes.hpp"
 
 namespace stackchan::network {
@@ -168,7 +169,7 @@ void HttpServerController::registerRoutes()
     server_.on("/pose", HTTP_POST, [this]() { handlePose(); });
     server_.on("/move", HTTP_POST, [this]() { handleMove(); });
     server_.on("/reset", HTTP_POST, [this]() { handleReset(); });
-    server_.on("/play-wav", HTTP_POST, [this]() { handlePlayWav(); });
+    server_.on("/play-wav", HTTP_POST, [this]() { handlePlayWav(); }, [this]() { handlePlayWavBody(); });
     server_.on("/audio/status", HTTP_GET, [this]() { handleAudioStatus(); });
     server_.on("/audio/volume", HTTP_POST, [this]() { handleAudioVolume(); });
     server_.on("/audio/stop", HTTP_POST, [this]() { handleAudioStop(); });
@@ -381,12 +382,91 @@ void HttpServerController::handleReset()
 void HttpServerController::handlePlayWav()
 {
     if (!requireAuth()) return;
-    const size_t size = server_.arg("plain").length();
+    if (wavBodyBuffer_ != nullptr && wavBodySize_ > 0) {
+        String error;
+        if (!body_.prepareWav(wavBodySize_, error)) {
+            free(wavBodyBuffer_);
+            wavBodyBuffer_ = nullptr;
+            wavBodySize_ = 0;
+            return sendError(error == "AUDIO_TOO_LARGE" ? 413 : 409, error.c_str(), error);
+        }
+        memcpy(body_.wavReceiveBuffer(), wavBodyBuffer_, wavBodySize_);
+        const size_t size = wavBodySize_;
+        free(wavBodyBuffer_);
+        wavBodyBuffer_ = nullptr;
+        wavBodySize_ = 0;
+        if (!body_.queuePreparedWav(size, error)) {
+            return sendError(400, error.c_str(), error);
+        }
+        return sendOk(String("{\"queued\":true,\"size\":") + size + "}");
+    }
+    if (wavBodyError_.length() > 0) {
+        const String error = wavBodyError_;
+        wavBodyError_ = "";
+        return sendError(error == "AUDIO_TOO_LARGE" ? 413 : 400, error.c_str(), error);
+    }
+
+    const String plain = server_.arg("plain");
+    const size_t size = plain.length();
     String error;
     if (!body_.prepareWav(size, error)) return sendError(error == "AUDIO_TOO_LARGE" ? 413 : 409, error.c_str(), error);
-    memcpy(body_.wavReceiveBuffer(), server_.arg("plain").c_str(), size);
-    if (!body_.playPreparedWav(size, error)) return sendError(400, error.c_str(), error);
-    sendOk(String("{\"playing\":true,\"size\":") + size + "}");
+    memcpy(body_.wavReceiveBuffer(), plain.c_str(), size);
+    if (!body_.queuePreparedWav(size, error)) return sendError(400, error.c_str(), error);
+    sendOk(String("{\"queued\":true,\"size\":") + size + "}");
+}
+
+void HttpServerController::handlePlayWavBody()
+{
+    if (!auth_.authorize(server_)) {
+        return;
+    }
+
+    HTTPRaw& raw = server_.raw();
+    if (raw.status == RAW_START) {
+        if (wavBodyBuffer_ != nullptr) {
+            free(wavBodyBuffer_);
+        }
+        wavBodyBuffer_ = static_cast<uint8_t*>(ps_malloc(kMaxWavBytes));
+        if (wavBodyBuffer_ == nullptr) {
+            wavBodyBuffer_ = static_cast<uint8_t*>(malloc(kMaxWavBytes));
+        }
+        wavBodySize_ = 0;
+        wavBodyError_ = wavBodyBuffer_ == nullptr ? "INTERNAL_ERROR" : "";
+        return;
+    }
+
+    if (raw.status == RAW_WRITE) {
+        if (wavBodyError_.length() > 0) {
+            return;
+        }
+        if (wavBodyBuffer_ == nullptr) {
+            wavBodyError_ = "INTERNAL_ERROR";
+            return;
+        }
+        if (wavBodySize_ + raw.currentSize > kMaxWavBytes) {
+            wavBodyError_ = "AUDIO_TOO_LARGE";
+            return;
+        }
+        memcpy(wavBodyBuffer_ + wavBodySize_, raw.buf, raw.currentSize);
+        wavBodySize_ += raw.currentSize;
+        return;
+    }
+
+    if (raw.status == RAW_END) {
+        if (wavBodySize_ == 0 && wavBodyError_.length() == 0) {
+            wavBodyError_ = "AUDIO_TRANSFER_FAILED";
+        }
+        return;
+    }
+
+    if (raw.status == RAW_ABORTED) {
+        if (wavBodyBuffer_ != nullptr) {
+            free(wavBodyBuffer_);
+            wavBodyBuffer_ = nullptr;
+        }
+        wavBodySize_ = 0;
+        wavBodyError_ = "AUDIO_TRANSFER_FAILED";
+    }
 }
 
 void HttpServerController::handleAudioStatus()

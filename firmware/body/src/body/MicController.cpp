@@ -32,6 +32,13 @@ void MicController::begin()
     }
 }
 
+void MicController::end()
+{
+    M5.Mic.end();
+    state_.setAvailable(false);
+    state_.setRecording(false);
+}
+
 bool MicController::recordWav(uint32_t durationMs, String& error)
 {
     if (!state_.available()) {

@@ -291,9 +291,10 @@ uint8_t* CommandHandler::wavReceiveBuffer()
 String CommandHandler::completeWavTransfer(size_t size)
 {
     String error;
-    if (!body_.playPreparedWav(size, error)) {
+    if (!body_.queuePreparedWav(size, error)) {
         return String("ERR ") + error;
     }
+    body_.processAudioQueue();
     String response = "OK AUDIO PLAY size=";
     response += size;
     return response;

@@ -22,21 +22,56 @@ uint32_t readLe32(const uint8_t* data)
 
 void AudioController::begin()
 {
+    mode_ = AudioMode::Idle;
+    M5.Speaker.end();
+    delay(50);
+    auto config = M5.Speaker.config();
+    config.dma_buf_len = 1024;
+    config.dma_buf_count = 8;
+    M5.Speaker.config(config);
     M5.Speaker.begin();
     M5.Speaker.setVolume(state_.volume());
     M5.Speaker.setAllChannelVolume(255);
     state_.setState(AudioPlaybackState::Idle);
     state_.setPlaying(false);
+    state_.setQueued(false);
+    expectedDurationMs_ = 0;
+    wavSampleRate_ = 0;
+    Serial.println("[AUDIO] begin done");
 }
 
 void AudioController::update()
 {
-    if (state_.isPlaying() && !M5.Speaker.isPlaying()) {
-        state_.setPlaying(false);
-        state_.setState(AudioPlaybackState::Finished);
-        state_.markFinished(millis());
-        releaseBuffer();
+    if (mode_ == AudioMode::Playback && state_.isQueued()) {
+        return;
     }
+
+    if (state_.isPlaying()) {
+        const bool speakerStillPlaying = M5.Speaker.isPlaying();
+        const uint32_t elapsed = millis() - state_.startedAt();
+        const bool timeExpired = (expectedDurationMs_ > 0) && (elapsed > expectedDurationMs_ + 500);
+
+        if (!speakerStillPlaying || timeExpired) {
+            if (timeExpired) {
+                Serial.println("[AUDIO] failsafe: forcing stop after timeout");
+                M5.Speaker.stop();
+            }
+            state_.setPlaying(false);
+            state_.setState(AudioPlaybackState::Finished);
+            state_.markFinished(millis());
+            releaseBuffer();
+        }
+    }
+}
+
+AudioMode AudioController::mode() const
+{
+    return mode_;
+}
+
+void AudioController::setMode(AudioMode mode)
+{
+    mode_ = mode;
 }
 
 bool AudioController::prepareWav(size_t size, String& error)
@@ -74,7 +109,7 @@ uint8_t* AudioController::preparedBuffer()
     return wavBuffer_;
 }
 
-bool AudioController::playWav(uint8_t* buffer, size_t size, String& error)
+bool AudioController::queuePlayWav(uint8_t* buffer, size_t size, String& error)
 {
     if (buffer == nullptr || buffer != wavBuffer_ || size != state_.currentSize()) {
         error = "AUDIO_TRANSFER_FAILED";
@@ -92,33 +127,103 @@ bool AudioController::playWav(uint8_t* buffer, size_t size, String& error)
         return false;
     }
 
-    M5.Speaker.begin();
-    M5.Speaker.setVolume(state_.volume());
-    M5.Speaker.setAllChannelVolume(255);
-    if (!M5.Speaker.playWav(buffer, size, 1, 0, true)) {
+    wavSampleRate_ = extractSampleRate(buffer, size);
+    expectedDurationMs_ = estimateWavDurationMs(buffer, size);
+
+    state_.setState(AudioPlaybackState::Queued);
+    state_.setQueued(true);
+    return true;
+}
+
+bool AudioController::startQueuedPlay(String& error)
+{
+    if (!state_.isQueued()) {
+        error = "AUDIO_NOT_QUEUED";
+        return false;
+    }
+
+    if (wavBuffer_ == nullptr) {
+        error = "AUDIO_BUFFER_LOST";
+        state_.setState(AudioPlaybackState::Error);
+        state_.setError(error);
+        state_.setQueued(false);
+        return false;
+    }
+
+    const size_t size = state_.receivedSize();
+
+    logHardwareState("before playWav");
+
+    if (!M5.Speaker.playWav(wavBuffer_, size, 1, -1, true)) {
         error = "AUDIO_INVALID_FORMAT";
         state_.setState(AudioPlaybackState::Error);
         state_.setError(error);
+        state_.setQueued(false);
         releaseBuffer();
         return false;
     }
 
     state_.setState(AudioPlaybackState::Playing);
     state_.setPlaying(true);
+    state_.setQueued(false);
     state_.markStarted(millis());
     state_.clearError();
+    setMode(AudioMode::Playback);
+    logHardwareState("after playWav");
     return true;
+}
+
+bool AudioController::rebeginSpeakerForWav(uint32_t sampleRate)
+{
+    Serial.println("[AUDIO] rebeginSpeakerForWav: using stop() only, no end()");
+
+    if (M5.Speaker.isPlaying()) {
+        Serial.println("[AUDIO] speaker still playing, stopping first");
+        M5.Speaker.stop();
+        delay(30);
+    }
+
+    // end() is avoided because it hangs waiting for the speaker task to exit.
+    // begin() at boot should keep AMP enabled. Just call begin() once at boot.
+    M5.Speaker.setVolume(state_.volume());
+    M5.Speaker.setAllChannelVolume(255);
+
+    logHardwareState("after rebegin (stop only)");
+    return true;
+}
+
+void AudioController::logHardwareState(const char* label) const
+{
+    Serial.printf(
+        "[AUDIO] %s: spk enabled=%d running=%d playing=%d | mic enabled=%d running=%d recording=%d\n",
+        label,
+        M5.Speaker.isEnabled(),
+        M5.Speaker.isRunning(),
+        M5.Speaker.isPlaying(),
+        M5.Mic.isEnabled(),
+        M5.Mic.isRunning(),
+        M5.Mic.isRecording()
+    );
+}
+
+uint32_t AudioController::preparedSampleRate() const
+{
+    return wavSampleRate_;
 }
 
 void AudioController::stop()
 {
     M5.Speaker.stop();
     state_.setPlaying(false);
+    state_.setQueued(false);
     state_.setState(AudioPlaybackState::Idle);
     state_.setCurrentSize(0);
     state_.setReceivedSize(0);
+    expectedDurationMs_ = 0;
+    wavSampleRate_ = 0;
     state_.markFinished(millis());
     releaseBuffer();
+    setMode(AudioMode::Idle);
 }
 
 bool AudioController::setVolume(int volume)
@@ -188,6 +293,69 @@ bool AudioController::validateWav(const uint8_t* buffer, size_t size) const
         && channels == 1
         && (sampleRate == 16000 || sampleRate == 24000)
         && bitsPerSample == 16;
+}
+
+uint32_t AudioController::extractSampleRate(const uint8_t* buffer, size_t size) const
+{
+    if (buffer == nullptr || size < 44) {
+        return 0;
+    }
+
+    size_t offset = 12;
+    while (offset + 8 <= size) {
+        const uint8_t* chunk = buffer + offset;
+        const uint32_t chunkSize = readLe32(chunk + 4);
+        const size_t dataOffset = offset + 8;
+        if (dataOffset + chunkSize > size) {
+            return 0;
+        }
+
+        if (memcmp(chunk, "fmt ", 4) == 0 && chunkSize >= 16) {
+            return readLe32(buffer + dataOffset + 4);
+        }
+
+        offset = dataOffset + chunkSize + (chunkSize % 2);
+    }
+    return 0;
+}
+
+uint32_t AudioController::estimateWavDurationMs(const uint8_t* buffer, size_t size) const
+{
+    if (buffer == nullptr || size < 44) {
+        return 0;
+    }
+
+    size_t offset = 12;
+    uint32_t sampleRate = 0;
+    uint16_t channels = 0;
+    uint16_t bitsPerSample = 0;
+    uint32_t dataSize = 0;
+
+    while (offset + 8 <= size) {
+        const uint8_t* chunk = buffer + offset;
+        const uint32_t chunkSize = readLe32(chunk + 4);
+        const size_t dataOffset = offset + 8;
+        if (dataOffset + chunkSize > size) {
+            return 0;
+        }
+
+        if (memcmp(chunk, "fmt ", 4) == 0 && chunkSize >= 16) {
+            channels = readLe16(buffer + dataOffset + 2);
+            sampleRate = readLe32(buffer + dataOffset + 4);
+            bitsPerSample = readLe16(buffer + dataOffset + 14);
+        } else if (memcmp(chunk, "data", 4) == 0) {
+            dataSize = chunkSize;
+        }
+
+        offset = dataOffset + chunkSize + (chunkSize % 2);
+    }
+
+    if (sampleRate == 0 || channels == 0 || bitsPerSample == 0 || dataSize == 0) {
+        return 0;
+    }
+
+    const uint32_t bytesPerSecond = sampleRate * channels * (bitsPerSample / 8);
+    return (dataSize * 1000ULL) / bytesPerSecond;
 }
 
 void AudioController::releaseBuffer()
