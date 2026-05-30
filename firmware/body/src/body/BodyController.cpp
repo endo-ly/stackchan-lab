@@ -43,21 +43,10 @@ void BodyController::update()
     const bool wasAudioPlaying = audio_.isPlaying();
     audio_.update();
     if (wasAudioPlaying && !audio_.isPlaying()) {
+        leavePlaybackMode();
         face_.setSpeaking(false);
         face_.setMouthOpen(false);
         led_.setMood(state_.mood());
-    }
-    if (wakePausedForAudio_ && !audio_.isPlaying()) {
-        face_.setSpeaking(false);
-        face_.setMouthOpen(false);
-        led_.setMood(state_.mood());
-        wakePausedForAudio_ = false;
-        mic_.begin();
-        String wakeError;
-        if (!wake_.start(wakeError)) {
-            Serial.print("[BODY][WARN] wake restart after audio failed: ");
-            Serial.println(wakeError);
-        }
     }
     input_.update();
     face_.update();
@@ -172,6 +161,9 @@ void BodyController::leavePlaybackMode()
 {
     Serial.println("[BODY] leavePlaybackMode");
     logHardwareState("before");
+
+    M5.Speaker.end();
+    delay(50);
 
     if (wakePausedForAudio_) {
         wakePausedForAudio_ = false;

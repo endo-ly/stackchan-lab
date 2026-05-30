@@ -23,13 +23,12 @@ uint32_t readLe32(const uint8_t* data)
 void AudioController::begin()
 {
     mode_ = AudioMode::Idle;
-    M5.Speaker.end();
-    delay(50);
     auto config = M5.Speaker.config();
     config.dma_buf_len = 1024;
     config.dma_buf_count = 8;
     M5.Speaker.config(config);
-    M5.Speaker.begin();
+    // Speaker is NOT begin()-ed here; it will be lazily initialized
+    // in rebeginSpeakerForWav() right before playback.
     M5.Speaker.setVolume(state_.volume());
     M5.Speaker.setAllChannelVolume(255);
     state_.setState(AudioPlaybackState::Idle);
@@ -37,7 +36,7 @@ void AudioController::begin()
     state_.setQueued(false);
     expectedDurationMs_ = 0;
     wavSampleRate_ = 0;
-    Serial.println("[AUDIO] begin done");
+    Serial.println("[AUDIO] begin done (lazy init)");
 }
 
 void AudioController::update()
@@ -175,7 +174,7 @@ bool AudioController::startQueuedPlay(String& error)
 
 bool AudioController::rebeginSpeakerForWav(uint32_t sampleRate)
 {
-    Serial.println("[AUDIO] rebeginSpeakerForWav: using stop() only, no end()");
+    Serial.println("[AUDIO] rebeginSpeakerForWav: stop + config + begin");
 
     if (M5.Speaker.isPlaying()) {
         Serial.println("[AUDIO] speaker still playing, stopping first");
@@ -183,13 +182,19 @@ bool AudioController::rebeginSpeakerForWav(uint32_t sampleRate)
         delay(30);
     }
 
-    // end() is avoided because it hangs waiting for the speaker task to exit.
-    // begin() at boot should keep AMP enabled. Just call begin() once at boot.
+    auto config = M5.Speaker.config();
+    config.sample_rate = sampleRate > 0 ? sampleRate : 24000;
+    config.dma_buf_len = 1024;
+    config.dma_buf_count = 8;
+    M5.Speaker.config(config);
+
+    const bool ok = M5.Speaker.begin();
+
     M5.Speaker.setVolume(state_.volume());
     M5.Speaker.setAllChannelVolume(255);
 
-    logHardwareState("after rebegin (stop only)");
-    return true;
+    logHardwareState("after rebegin (config + begin)");
+    return ok && M5.Speaker.isEnabled() && M5.Speaker.isRunning();
 }
 
 void AudioController::logHardwareState(const char* label) const

@@ -160,9 +160,11 @@ class StackChanTester:
         try:
             body = self.get_json("/health")
             ok = body.get("ok") and body.get("data", {}).get("status") == "ok"
+            self.record("connectivity", ok)
             self.print_result("/health", ok)
             return ok
         except Exception as e:
+            self.record("connectivity", False)
             self.print_result("/health", False, str(e))
             return False
 
