@@ -7,6 +7,7 @@ import { validateWav } from "./wav.js";
 import type { BridgeConfig } from "../config/types.js";
 import { transcriptionToEvent } from "../stt/SttEventMapper.js";
 import type { BridgeInputEvent, TranscriptionResult } from "../stt/SttTypes.js";
+import type { SpokenReplyPipeline } from "../spokenReply/SpokenReplyPipeline.js";
 import type { DeviceTransport } from "../transport/DeviceTransport.js";
 import { commands, expressions, moods, poses, presets, type Expression, type Mood, type Pose, type PresetName } from "../types/body.js";
 
@@ -17,6 +18,7 @@ export class StackChanBridge {
   constructor(
     private readonly config: BridgeConfig,
     private readonly transport: DeviceTransport,
+    private readonly spokenReply?: SpokenReplyPipeline,
   ) {
   }
 
@@ -91,6 +93,9 @@ export class StackChanBridge {
     const latest = this.state.updateTranscription(result, timestamp);
     const event = this.bridgeEvents.addSttEvent((id) => transcriptionToEvent(id, result, timestamp));
     this.state.updateBridgeEvents(this.bridgeEvents.list());
+    if (this.spokenReply) {
+      void this.spokenReply.handle(result);
+    }
     return {
       ...latest,
       event,
@@ -101,6 +106,18 @@ export class StackChanBridge {
     return {
       latest: this.state.getLatestTranscription(),
     };
+  }
+
+  getSpokenReplyStatus() {
+    return this.spokenReply?.status() ?? { enabled: false, busy: false };
+  }
+
+  startSpokenReply() {
+    return this.spokenReply?.start() ?? { enabled: false, busy: false };
+  }
+
+  stopSpokenReply() {
+    return this.spokenReply?.stop() ?? { enabled: false, busy: false };
   }
 
   async setFace(expression: string) {

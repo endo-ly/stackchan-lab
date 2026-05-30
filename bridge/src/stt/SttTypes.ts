@@ -1,5 +1,5 @@
 export type SttConfig = {
-  transcribeUrl: string;
+  model: string;
 };
 
 export type TranscriptionResult = {

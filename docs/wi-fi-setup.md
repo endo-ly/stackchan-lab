@@ -80,7 +80,7 @@ STT 連携など、運用に必要な設定を別途送信します。
 npm run device:config -- config.yaml
 ```
 
-これにより `config.yaml` の `stt.transcribe_url` が StackChan 本体に送信されます。Wi-Fi 設定とは別のコマンド（`DEVICE:CONFIG_JSON`）で転送されます。
+これにより `config.yaml` の `voice_gateway.base_url` から組み立てた `/v1/transcribe` と、`wake.record_duration_ms` が StackChan 本体に送信されます。Wi-Fi 設定とは別のコマンド（`DEVICE:CONFIG_JSON`）で転送されます。
 
 ### 5. Bridge の設定変更
 

@@ -12,6 +12,17 @@ constexpr const char* kHostnameKey = "hostname";
 constexpr const char* kAuthTokenKey = "auth_token";
 constexpr const char* kSpeechServicesUrlKey = "speech_url";
 constexpr const char* kWakeAutoStartKey = "wake_auto_start";
+constexpr const char* kWakeRecordDurationMsKey = "wake_record_ms";
+constexpr uint32_t kDefaultWakeRecordDurationMs = 5000;
+constexpr uint32_t kMinWakeRecordDurationMs = 1000;
+constexpr uint32_t kMaxWakeRecordDurationMs = 15000;
+
+uint32_t clampWakeRecordDurationMs(uint32_t value)
+{
+    if (value < kMinWakeRecordDurationMs) return kMinWakeRecordDurationMs;
+    if (value > kMaxWakeRecordDurationMs) return kMaxWakeRecordDurationMs;
+    return value;
+}
 
 }  // namespace
 
@@ -33,6 +44,8 @@ bool WiFiManager::loadConfig(WiFiConfig& config)
     config.authToken = preferences_.getString(kAuthTokenKey, "");
     config.speechServicesUrl = preferences_.getString(kSpeechServicesUrlKey, "");
     config.wakeAutoStart = preferences_.getBool(kWakeAutoStartKey, false);
+    config.wakeRecordDurationMs = clampWakeRecordDurationMs(
+        preferences_.getUInt(kWakeRecordDurationMsKey, kDefaultWakeRecordDurationMs));
     preferences_.end();
     return config.ssid.length() > 0;
 }
@@ -49,17 +62,21 @@ bool WiFiManager::saveConfig(const WiFiConfig& config)
     }
     const String existingSpeechServicesUrl = preferences_.getString(kSpeechServicesUrlKey, "");
     const bool existingWakeAutoStart = preferences_.getBool(kWakeAutoStartKey, false);
+    const uint32_t existingWakeRecordDurationMs = clampWakeRecordDurationMs(
+        preferences_.getUInt(kWakeRecordDurationMsKey, kDefaultWakeRecordDurationMs));
     const bool ok = preferences_.putString(kSsidKey, config.ssid) > 0
         && preferences_.putString(kPasswordKey, config.password) == config.password.length()
         && preferences_.putString(kHostnameKey, config.hostname) > 0
         && preferences_.putString(kAuthTokenKey, config.authToken) == config.authToken.length()
         && preferences_.putString(kSpeechServicesUrlKey, existingSpeechServicesUrl) == existingSpeechServicesUrl.length()
-        && preferences_.putBool(kWakeAutoStartKey, existingWakeAutoStart);
+        && preferences_.putBool(kWakeAutoStartKey, existingWakeAutoStart)
+        && preferences_.putUInt(kWakeRecordDurationMsKey, existingWakeRecordDurationMs) > 0;
     preferences_.end();
     if (ok) {
         config_ = config;
         config_.speechServicesUrl = existingSpeechServicesUrl;
         config_.wakeAutoStart = existingWakeAutoStart;
+        config_.wakeRecordDurationMs = existingWakeRecordDurationMs;
         state_.hostname = config.hostname;
         state_.authEnabled = config.authToken.length() > 0;
         state_.lastError = "";
@@ -71,25 +88,28 @@ bool WiFiManager::saveConfig(const WiFiConfig& config)
 
 bool WiFiManager::saveSpeechServicesUrl(const String& url)
 {
-    return saveDeviceConfig(url, config_.wakeAutoStart);
+    return saveDeviceConfig(url, config_.wakeAutoStart, config_.wakeRecordDurationMs);
 }
 
-bool WiFiManager::saveDeviceConfig(const String& speechServicesUrl, bool wakeAutoStart)
+bool WiFiManager::saveDeviceConfig(const String& speechServicesUrl, bool wakeAutoStart, uint32_t wakeRecordDurationMs)
 {
     if (speechServicesUrl.length() == 0) {
         state_.lastError = "invalid_speech_services_url";
         return false;
     }
+    const uint32_t clampedWakeRecordDurationMs = clampWakeRecordDurationMs(wakeRecordDurationMs);
     if (!preferences_.begin(kNamespace, false)) {
         state_.lastError = "preferences_open_failed";
         return false;
     }
     const bool ok = preferences_.putString(kSpeechServicesUrlKey, speechServicesUrl) == speechServicesUrl.length()
-        && preferences_.putBool(kWakeAutoStartKey, wakeAutoStart);
+        && preferences_.putBool(kWakeAutoStartKey, wakeAutoStart)
+        && preferences_.putUInt(kWakeRecordDurationMsKey, clampedWakeRecordDurationMs) > 0;
     preferences_.end();
     if (ok) {
         config_.speechServicesUrl = speechServicesUrl;
         config_.wakeAutoStart = wakeAutoStart;
+        config_.wakeRecordDurationMs = clampedWakeRecordDurationMs;
         state_.lastError = "";
     } else {
         state_.lastError = "save_failed";

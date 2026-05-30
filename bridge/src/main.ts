@@ -5,14 +5,18 @@ import { MockStackChanClient } from "./mock/MockStackChanClient.js";
 import { SerialProtocolClient } from "./serial/SerialProtocolClient.js";
 import { StackChanSerialClient } from "./serial/StackChanSerialClient.js";
 import type { StackChanClient } from "./serial/StackChanClient.js";
+import { SpokenReplyPipeline } from "./spokenReply/SpokenReplyPipeline.js";
 import type { DeviceTransport } from "./transport/DeviceTransport.js";
 import { SerialTransport } from "./transport/SerialTransport.js";
 import { WifiTransport } from "./transport/WifiTransport.js";
+import { VoiceGatewayClient } from "./voiceGateway/VoiceGatewayClient.js";
 
 const configPath = process.env.STACKCHAN_BRIDGE_CONFIG ?? process.argv[2] ?? "config.yaml";
 const config = loadConfig(configPath);
 const transport = createTransport();
-const bridge = new StackChanBridge(config, transport);
+const voiceGateway = new VoiceGatewayClient(config);
+const spokenReply = new SpokenReplyPipeline(config, voiceGateway, transport);
+const bridge = new StackChanBridge(config, transport, spokenReply);
 const server = await createServer(bridge);
 
 await bridge.start();

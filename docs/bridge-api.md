@@ -760,9 +760,29 @@ wifi:
   timeout_ms: 5000                  # HTTP リクエストタイムアウト（ミリ秒）
   health_check_interval_ms: 5000    # ヘルスチェック間隔（ミリ秒）
 
-# === STT 連携（任意） ===
+# === voice-gateway 連携（任意） ===
+voice_gateway:
+  base_url: "http://<voice-gateway>:8012"
+  timeout_ms: 120000
+
 stt:
-  transcribe_url: "http://<voice-gateway>:8012/v1/transcribe"  # voice-gateway エンドポイント
+  model: "stt-default"
+
+tts:
+  model: "aivis-default"
+  voice: "your-voice-name"
+  response_format: "wav"
+
+wake:
+  auto_start: true
+  record_duration_ms: 5000
+
+spoken_reply:
+  enabled: false
+  listen_sources:
+    - "stackchan-wake"
+  cooldown_ms: 800
+  busy_policy: "ignore"
 
 events:
   include_bridge_events: true  # Bridge 側イベントを /events に含めるか

@@ -7,3 +7,5 @@ docs/plan/
 node_modules/
 dist/
 bridge/config.yaml
+__pycache__/
+*.py[cod]

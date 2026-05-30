@@ -29,11 +29,27 @@ type RawConfig = {
     timeout_ms?: unknown;
     health_check_interval_ms?: unknown;
   };
+  voice_gateway?: {
+    base_url?: unknown;
+    timeout_ms?: unknown;
+  };
   stt?: {
-    transcribe_url?: unknown;
+    model?: unknown;
+  };
+  tts?: {
+    model?: unknown;
+    voice?: unknown;
+    response_format?: unknown;
   };
   wake?: {
     auto_start?: unknown;
+    record_duration_ms?: unknown;
+  };
+  spoken_reply?: {
+    enabled?: unknown;
+    listen_sources?: unknown;
+    cooldown_ms?: unknown;
+    busy_policy?: unknown;
   };
   events?: {
     include_bridge_events?: unknown;
@@ -86,11 +102,27 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
       timeoutMs: numberValue(raw.wifi?.timeout_ms, 5000, "wifi.timeout_ms"),
       healthCheckIntervalMs: numberValue(raw.wifi?.health_check_interval_ms, 5000, "wifi.health_check_interval_ms"),
     },
+    voiceGateway: {
+      baseUrl: normalizeBaseUrl(stringValue(raw.voice_gateway?.base_url, "http://127.0.0.1:8012")),
+      timeoutMs: numberValue(raw.voice_gateway?.timeout_ms, 120000, "voice_gateway.timeout_ms"),
+    },
     stt: {
-      transcribeUrl: stringValue(raw.stt?.transcribe_url, "http://127.0.0.1:8012/v1/transcribe"),
+      model: stringValue(raw.stt?.model, "stt-default"),
+    },
+    tts: {
+      model: stringValue(raw.tts?.model, "aivis-default"),
+      voice: stringValue(raw.tts?.voice, "your-voice-name"),
+      responseFormat: stringValue(raw.tts?.response_format, "wav"),
     },
     wake: {
       autoStart: booleanValue(raw.wake?.auto_start, false, "wake.auto_start"),
+      recordDurationMs: numberValue(raw.wake?.record_duration_ms, 5000, "wake.record_duration_ms"),
+    },
+    spokenReply: {
+      enabled: booleanValue(raw.spoken_reply?.enabled, false, "spoken_reply.enabled"),
+      listenSources: stringArrayValue(raw.spoken_reply?.listen_sources, ["stackchan-wake"], "spoken_reply.listen_sources"),
+      cooldownMs: numberValue(raw.spoken_reply?.cooldown_ms, 800, "spoken_reply.cooldown_ms"),
+      busyPolicy: busyPolicyValue(raw.spoken_reply?.busy_policy, "ignore", "spoken_reply.busy_policy"),
     },
     events: {
       includeBridgeEvents: booleanValue(raw.events?.include_bridge_events, true, "events.include_bridge_events"),
@@ -107,6 +139,9 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
   };
 
   validateSafetyConfig(config.safety);
+  validatePositive(config.voiceGateway.timeoutMs, "voice_gateway.timeout_ms");
+  validateRange(config.wake.recordDurationMs, 1000, 15000, "wake.record_duration_ms");
+  validateNonNegative(config.spokenReply.cooldownMs, "spoken_reply.cooldown_ms");
   return config;
 }
 
@@ -152,6 +187,42 @@ function booleanValue(value: unknown, fallback: boolean, field: string): boolean
   return value;
 }
 
+function stringArrayValue(value: unknown, fallback: string[], field: string): string[] {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new BridgeError("CONFIG_ERROR", `${field} must be an array of non-empty strings`);
+  }
+  return [...value];
+}
+
+function busyPolicyValue(value: unknown, fallback: "ignore", field: string): "ignore" {
+  const policy = stringValue(value, fallback);
+  if (policy !== "ignore") {
+    throw new BridgeError("CONFIG_ERROR", `${field} must be ignore`);
+  }
+  return policy;
+}
+
 function normalizeBaseUrl(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function validatePositive(value: number, field: string): void {
+  if (value <= 0) {
+    throw new BridgeError("CONFIG_ERROR", `${field} must be positive`);
+  }
+}
+
+function validateNonNegative(value: number, field: string): void {
+  if (value < 0) {
+    throw new BridgeError("CONFIG_ERROR", `${field} must be zero or positive`);
+  }
+}
+
+function validateRange(value: number, min: number, max: number, field: string): void {
+  if (value < min || value > max) {
+    throw new BridgeError("CONFIG_ERROR", `${field} must be between ${min} and ${max}`);
+  }
 }

@@ -73,8 +73,28 @@ wifi:
 外部の `voice-gateway` を使用する場合:
 
 ```yaml
+voice_gateway:
+  base_url: "http://<voice-gateway>:8012"
+  timeout_ms: 120000
+
 stt:
-  transcribe_url: "http://<voice-gateway>:8012/v1/transcribe"
+  model: "stt-default"
+
+tts:
+  model: "aivis-default"
+  voice: "your-voice-name"
+  response_format: "wav"
+
+wake:
+  auto_start: true
+  record_duration_ms: 5000
+
+spoken_reply:
+  enabled: true
+  listen_sources:
+    - "stackchan-wake"
+  cooldown_ms: 800
+  busy_policy: "ignore"
 
 events:
   include_bridge_events: true

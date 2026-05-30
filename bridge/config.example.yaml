@@ -20,14 +20,28 @@ wifi:
   timeout_ms: 5000
   health_check_interval_ms: 5000
 
+voice_gateway:
+  base_url: "http://192.168.0.210:8012"
+  timeout_ms: 120000
+
 stt:
-  # voice-gateway の /v1/transcribe エンドポイント
-  # StackChan 本体から録音WAVが直接アップロードされる先
-  # 例: "http://192.168.0.210:8012/v1/transcribe"
-  transcribe_url: "http://<voice-gateway>:8012/v1/transcribe"
+  model: "stt-default"
+
+tts:
+  model: "aivis-default"
+  voice: "your-voice-name"
+  response_format: "wav"
 
 wake:
   auto_start: false
+  record_duration_ms: 5000
+
+spoken_reply:
+  enabled: false
+  listen_sources:
+    - "stackchan-wake"
+  cooldown_ms: 800
+  busy_policy: "ignore"
 
 events:
   include_bridge_events: true

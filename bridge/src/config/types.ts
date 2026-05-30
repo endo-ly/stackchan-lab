@@ -8,6 +8,11 @@ export type WifiConfig = {
   healthCheckIntervalMs: number;
 };
 
+export type VoiceGatewayConfig = {
+  baseUrl: string;
+  timeoutMs: number;
+};
+
 export type BridgeConfig = {
   server: {
     host: string;
@@ -27,11 +32,24 @@ export type BridgeConfig = {
     };
   };
   wifi: WifiConfig;
+  voiceGateway: VoiceGatewayConfig;
   stt: {
-    transcribeUrl: string;
+    model: string;
+  };
+  tts: {
+    model: string;
+    voice: string;
+    responseFormat: string;
   };
   wake: {
     autoStart: boolean;
+    recordDurationMs: number;
+  };
+  spokenReply: {
+    enabled: boolean;
+    listenSources: string[];
+    cooldownMs: number;
+    busyPolicy: "ignore";
   };
   events: {
     includeBridgeEvents: boolean;

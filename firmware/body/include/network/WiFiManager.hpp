@@ -14,6 +14,7 @@ struct WiFiConfig {
     String authToken;
     String speechServicesUrl;
     bool wakeAutoStart = false;
+    uint32_t wakeRecordDurationMs = 5000;
 };
 
 class WiFiManager {
@@ -22,7 +23,7 @@ public:
     bool loadConfig(WiFiConfig& config);
     bool saveConfig(const WiFiConfig& config);
     bool saveSpeechServicesUrl(const String& url);
-    bool saveDeviceConfig(const String& speechServicesUrl, bool wakeAutoStart);
+    bool saveDeviceConfig(const String& speechServicesUrl, bool wakeAutoStart, uint32_t wakeRecordDurationMs);
     bool saveWakeAutoStart(bool enabled);
     bool clearConfig();
     bool connectSaved(uint32_t timeoutMs = 15000);

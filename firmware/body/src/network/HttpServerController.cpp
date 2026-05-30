@@ -215,7 +215,7 @@ void HttpServerController::processWakeDetection()
     wakeUploadInProgress_ = true;
     body_.showWakeDetected();
     String error;
-    if (!body_.recordMicWav(3000, error)) {
+    if (!body_.recordMicWav(wifi_.config().wakeRecordDurationMs, error)) {
         lastWakeUploadError_ = error;
         wakeUploadInProgress_ = false;
         restartWakeDetection();
@@ -560,6 +560,7 @@ void HttpServerController::handleWakeStatus()
     doc["lastProbability"] = wake.lastProbability();
     doc["averageProbability"] = wake.averageProbability();
     doc["autoStart"] = wifi_.config().wakeAutoStart;
+    doc["recordDurationMs"] = wifi_.config().wakeRecordDurationMs;
     JsonObject debug = doc["debug"].to<JsonObject>();
     debug["queuedBlocks"] = wake.queuedBlocks();
     debug["processedBlocks"] = wake.processedBlocks();

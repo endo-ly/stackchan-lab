@@ -11,6 +11,7 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
   server.get("/events", async () => success(await bridge.getEvents()));
   server.get("/events/latest", async () => success(await bridge.getLatestEvent()));
   server.get("/stt/latest", async () => success(bridge.getLatestTranscription()));
+  server.get("/spoken-reply/status", async () => success(bridge.getSpokenReplyStatus()));
   server.get("/presets", async () => success(bridge.getPresets()));
 
   server.post("/face", async (request) => {
@@ -43,6 +44,8 @@ export async function registerRoutes(server: FastifyInstance, bridge: StackChanB
   server.post("/audio/stop", async () => success(await bridge.stopAudio()));
 
   server.post("/events/clear", async () => success(await bridge.clearEvents()));
+  server.post("/spoken-reply/start", async () => success(bridge.startSpokenReply()));
+  server.post("/spoken-reply/stop", async () => success(bridge.stopSpokenReply()));
 
   server.post("/preset", async (request) => {
     const body = requireObject(request.body);
@@ -183,11 +186,15 @@ function statusFor(code: string): number {
     case "STACKCHAN_ERROR":
     case "TRANSPORT_ERROR":
     case "TRANSPORT_NOT_CONFIGURED":
+    case "VOICE_GATEWAY_ERROR":
+    case "VOICE_GATEWAY_UNREACHABLE":
     case "AUDIO_TRANSFER_FAILED":
     case "PRESET_APPLY_FAILED":
     case "EVENT_QUEUE_ERROR":
     case "UNSUPPORTED_INPUT":
       return 500;
+    case "VOICE_GATEWAY_TIMEOUT":
+      return 504;
     default:
       return 500;
   }

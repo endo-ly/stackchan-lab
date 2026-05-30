@@ -148,7 +148,7 @@ StackChan マイク
   ▼
 WakeController（Firmware）
   │ 10ms block 分割 → 特徴量生成 → microWakeWord TFLite 推論
-  │ wake word 検出 → 3秒録音
+  │ wake word 検出 → 設定された秒数だけ録音
   ▼
 MicController
   │ POST multipart/form-data → voice-gateway /v1/transcribe
@@ -161,9 +161,12 @@ voice-gateway（外部サービス）
   ▼
 StackChan Firmware
   │ lastSpeechResponse に保存
-外部システム
-  │ GET /wake/status → wakeUpload.lastSpeechResponse でテキスト取得
-  │ → LLM 処理 → TTS 生成 → POST /play-wav で再生
+voice-gateway
+  │ STT callback → bridge /stt/events
+  ▼
+Bridge
+  │ 固定応答テキスト → voice-gateway /v1/audio/speech
+  │ WAV → StackChan /play-wav
 ```
 
 ---
