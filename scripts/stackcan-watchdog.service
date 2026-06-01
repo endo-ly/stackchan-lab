@@ -1,0 +1,12 @@
+[Unit]
+Description=Stack-chan Auto-start Watchdog
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/workspace/stackchan-lab/scripts/stackcan-watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
