@@ -13,6 +13,16 @@ export type VoiceGatewayConfig = {
   timeoutMs: number;
 };
 
+export type AgentRuntimeConfig = {
+  endpoint: string;
+  authToken: string;
+  agentId: string;
+  surface: string;
+  sessionKey: string;
+  userId: string;
+  timeoutMs: number;
+};
+
 export type BridgeConfig = {
   server: {
     host: string;
@@ -33,6 +43,7 @@ export type BridgeConfig = {
   };
   wifi: WifiConfig;
   voiceGateway: VoiceGatewayConfig;
+  agentRuntime: AgentRuntimeConfig;
   stt: {
     model: string;
   };

@@ -33,6 +33,15 @@ type RawConfig = {
     base_url?: unknown;
     timeout_ms?: unknown;
   };
+  agent_runtime?: {
+    endpoint?: unknown;
+    auth_token?: unknown;
+    agent_id?: unknown;
+    surface?: unknown;
+    session_key?: unknown;
+    user_id?: unknown;
+    timeout_ms?: unknown;
+  };
   stt?: {
     model?: unknown;
   };
@@ -106,6 +115,15 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
       baseUrl: normalizeBaseUrl(stringValue(raw.voice_gateway?.base_url, "http://127.0.0.1:8012")),
       timeoutMs: numberValue(raw.voice_gateway?.timeout_ms, 120000, "voice_gateway.timeout_ms"),
     },
+    agentRuntime: {
+      endpoint: stringValue(raw.agent_runtime?.endpoint, ""),
+      authToken: stringValue(raw.agent_runtime?.auth_token, ""),
+      agentId: stringValue(raw.agent_runtime?.agent_id, "default"),
+      surface: stringValue(raw.agent_runtime?.surface, "stackchan"),
+      sessionKey: stringValue(raw.agent_runtime?.session_key, "main"),
+      userId: stringValue(raw.agent_runtime?.user_id, "local-speaker"),
+      timeoutMs: numberValue(raw.agent_runtime?.timeout_ms, 120000, "agent_runtime.timeout_ms"),
+    },
     stt: {
       model: stringValue(raw.stt?.model, "stt-default"),
     },
@@ -140,9 +158,38 @@ export function loadConfig(configPath = "config.yaml"): BridgeConfig {
 
   validateSafetyConfig(config.safety);
   validatePositive(config.voiceGateway.timeoutMs, "voice_gateway.timeout_ms");
+  validatePositive(config.agentRuntime.timeoutMs, "agent_runtime.timeout_ms");
   validateRange(config.wake.recordDurationMs, 1000, 15000, "wake.record_duration_ms");
   validateNonNegative(config.spokenReply.cooldownMs, "spoken_reply.cooldown_ms");
+  if (config.spokenReply.enabled) {
+    validateAgentRuntime(config);
+  }
   return config;
+}
+
+function validateAgentRuntime(config: BridgeConfig): void {
+  const required: Array<[string, string]> = [
+    ["agent_runtime.endpoint", config.agentRuntime.endpoint],
+    ["agent_runtime.auth_token", config.agentRuntime.authToken],
+    ["agent_runtime.agent_id", config.agentRuntime.agentId],
+    ["agent_runtime.surface", config.agentRuntime.surface],
+    ["agent_runtime.session_key", config.agentRuntime.sessionKey],
+    ["agent_runtime.user_id", config.agentRuntime.userId],
+  ];
+  for (const [field, value] of required) {
+    if (value.trim().length === 0) {
+      throw new BridgeError("CONFIG_ERROR", `${field} is required when spoken_reply.enabled is true`);
+    }
+  }
+  let endpoint: URL;
+  try {
+    endpoint = new URL(config.agentRuntime.endpoint);
+  } catch {
+    throw new BridgeError("CONFIG_ERROR", "agent_runtime.endpoint must be a valid URL");
+  }
+  if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") {
+    throw new BridgeError("CONFIG_ERROR", "agent_runtime.endpoint must use http or https");
+  }
 }
 
 function parseConfigFile(path: string): RawConfig {

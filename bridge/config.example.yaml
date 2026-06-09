@@ -24,6 +24,15 @@ voice_gateway:
   base_url: "http://192.168.0.210:8012"
   timeout_ms: 120000
 
+agent_runtime:
+  endpoint: "http://127.0.0.1:10961/api/voice/turn"
+  auth_token: ""
+  agent_id: "default"
+  surface: "stackchan"
+  session_key: "main"
+  user_id: "local-speaker"
+  timeout_ms: 120000
+
 stt:
   model: "stt-default"
 

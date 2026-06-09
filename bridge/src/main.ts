@@ -1,4 +1,5 @@
 import { StackChanBridge } from "./bridge/StackChanBridge.js";
+import { AgentClient } from "./agent/AgentClient.js";
 import { loadConfig } from "./config/loadConfig.js";
 import { createServer } from "./http/createServer.js";
 import { MockStackChanClient } from "./mock/MockStackChanClient.js";
@@ -15,7 +16,8 @@ const configPath = process.env.STACKCHAN_BRIDGE_CONFIG ?? process.argv[2] ?? "co
 const config = loadConfig(configPath);
 const transport = createTransport();
 const voiceGateway = new VoiceGatewayClient(config);
-const spokenReply = new SpokenReplyPipeline(config, voiceGateway, transport);
+const agentClient = new AgentClient(config.agentRuntime);
+const spokenReply = new SpokenReplyPipeline(config, agentClient, voiceGateway, transport);
 const bridge = new StackChanBridge(config, transport, spokenReply);
 const server = await createServer(bridge);
 

@@ -698,6 +698,68 @@ curl -X POST http://127.0.0.1:8787/stt/events \
 
 ---
 
+### GET /spoken-reply/status
+
+自動音声応答 pipeline の現在状態と、直近 turn の結果・所要時間を返します。
+
+```bash
+curl http://127.0.0.1:8787/spoken-reply/status
+```
+
+**Response 200**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "enabled": true,
+    "busy": false,
+    "lastInput": {
+      "source": "stackchan-wake",
+      "text": "こんにちは",
+      "timestamp": "2026-06-09T13:00:00.000Z"
+    },
+    "lastReply": {
+      "text": "こんにちは。今日はどうしましたか？",
+      "timestamp": "2026-06-09T13:00:03.000Z"
+    },
+    "lastTiming": {
+      "agentMs": 1200,
+      "ttsMs": 900,
+      "playbackMs": 1400,
+      "totalMs": 3500
+    },
+    "lastCompletedAt": "2026-06-09T13:00:03.500Z"
+  }
+}
+```
+
+| Field | Type | 説明 |
+|---|---|---|
+| `enabled` | boolean | pipeline が有効か |
+| `busy` | boolean | turn を処理中か |
+| `lastInput` | object | 直近に処理を開始した STT 入力 |
+| `lastReply` | object | 直近の agent runtime 応答。空応答では `text` が空文字 |
+| `lastIgnored` | object | disabled / source filter / busy / cooldown により無視した直近入力 |
+| `lastError` | object | 直近の agent runtime / TTS / playback エラー |
+| `lastTiming.agentMs` | number | agent runtime 呼び出し時間 |
+| `lastTiming.ttsMs` | number | TTS 生成時間 |
+| `lastTiming.playbackMs` | number | device playback 完了までの時間 |
+| `lastTiming.totalMs` | number | agent 呼び出し開始から playback 完了までの合計時間 |
+| `lastCompletedAt` | string | 正常 turn の完了時刻 |
+
+agent runtime が空文字を正常応答した場合、TTS と playback は実行せず、`ttsMs` と `playbackMs` は `0` になります。turn が失敗した場合は `lastError` を更新し、前回成功時の `lastReply` と `lastTiming` は残しません。
+
+### POST /spoken-reply/start
+
+pipeline を有効化します。プロセス再起動後の初期値は `spoken_reply.enabled` に従います。
+
+### POST /spoken-reply/stop
+
+pipeline を無効化します。実行中 turn は中断せず、以後の STT event を `disabled` として無視します。
+
+---
+
 ## エラーコード一覧
 
 | Error Code | HTTP | 説明 |
@@ -763,6 +825,15 @@ wifi:
 # === voice-gateway 連携（任意） ===
 voice_gateway:
   base_url: "http://<voice-gateway>:8012"
+  timeout_ms: 120000
+
+agent_runtime:
+  endpoint: "http://<egopulse>:10961/api/voice/turn"
+  auth_token: "replace-me"
+  agent_id: "default"
+  surface: "stackchan"
+  session_key: "main"
+  user_id: "local-speaker"
   timeout_ms: 120000
 
 stt:
