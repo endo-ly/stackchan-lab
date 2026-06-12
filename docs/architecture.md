@@ -165,7 +165,7 @@ voice-gateway
   │ STT callback → bridge /stt/events
   ▼
 Bridge
-  │ 固定応答テキスト → voice-gateway /v1/audio/speech
+  │ AgentClient response → voice-gateway /v1/audio/speech
   │ WAV → StackChan /play-wav
 ```
 

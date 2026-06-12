@@ -77,6 +77,15 @@ voice_gateway:
   base_url: "http://<voice-gateway>:8012"
   timeout_ms: 120000
 
+agent_runtime:
+  endpoint: "http://<egopulse>:10961/api/voice/turn"
+  auth_token: "replace-me"
+  agent_id: "default"
+  surface: "stackchan"
+  session_key: "main"
+  user_id: "local-speaker"
+  timeout_ms: 120000
+
 stt:
   model: "stt-default"
 
@@ -99,6 +108,8 @@ spoken_reply:
 events:
   include_bridge_events: true
 ```
+
+`spoken_reply.enabled: true` の場合は `agent_runtime.endpoint` と `agent_runtime.auth_token` が必須です。bridge は `AgentClient` で応答テキストを取得し、そのテキストだけを voice-gateway へ渡します。
 
 設定項目の全詳細は [docs/bridge-api.md](../docs/bridge-api.md) の「設定リファレンス」セクションを参照。
 

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/main.ts",
+    "test": "tsx --test src/**/*.test.ts",
     "build": "tsc",
     "start": "node dist/main.js",
     "smoke": "bash scripts/smoke-test.sh",

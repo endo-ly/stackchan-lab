@@ -3,6 +3,9 @@ import type { TranscriptionResult } from "../stt/SttTypes.js";
 import type { DeviceTransport } from "../transport/DeviceTransport.js";
 import type { VoiceGatewayClient } from "../voiceGateway/VoiceGatewayClient.js";
 
+type AgentTurnClient = Pick<import("../agent/AgentClient.js").AgentClient, "createTurn">;
+type SpeechSynthesizer = Pick<VoiceGatewayClient, "synthesizeSpeech">;
+
 type SpokenReplyState = {
   enabled: boolean;
   busy: boolean;
@@ -25,6 +28,12 @@ type SpokenReplyState = {
     timestamp: string;
   };
   lastCompletedAt?: string;
+  lastTiming?: {
+    agentMs: number;
+    ttsMs: number;
+    playbackMs: number;
+    totalMs: number;
+  };
 };
 
 export class SpokenReplyPipeline {
@@ -34,11 +43,13 @@ export class SpokenReplyPipeline {
   private lastReply?: SpokenReplyState["lastReply"];
   private lastIgnored?: SpokenReplyState["lastIgnored"];
   private lastError?: SpokenReplyState["lastError"];
+  private lastTiming?: SpokenReplyState["lastTiming"];
   private lastCompletedAtMs = 0;
 
   constructor(
     private readonly config: BridgeConfig,
-    private readonly voiceGateway: VoiceGatewayClient,
+    private readonly agentClient: AgentTurnClient,
+    private readonly voiceGateway: SpeechSynthesizer,
     private readonly transport: DeviceTransport,
   ) {
     this.enabled = config.spokenReply.enabled;
@@ -62,6 +73,7 @@ export class SpokenReplyPipeline {
       lastReply: this.lastReply,
       lastIgnored: this.lastIgnored,
       lastError: this.lastError,
+      lastTiming: this.lastTiming,
       lastCompletedAt: this.lastCompletedAtMs > 0 ? new Date(this.lastCompletedAtMs).toISOString() : undefined,
     };
   }
@@ -87,6 +99,8 @@ export class SpokenReplyPipeline {
 
     this.busy = true;
     this.lastError = undefined;
+    this.lastReply = undefined;
+    this.lastTiming = undefined;
     this.lastInput = {
       source: result.source,
       text: result.text,
@@ -94,13 +108,40 @@ export class SpokenReplyPipeline {
     };
 
     try {
-      const replyText = buildReplyText(result.text);
+      const totalStartedAt = performance.now();
+      const agentStartedAt = performance.now();
+      const replyText = await this.agentClient.createTurn(result.text, result.source);
+      const agentMs = performance.now() - agentStartedAt;
+      if (replyText.length === 0) {
+        this.lastReply = {
+          text: "",
+          timestamp: new Date().toISOString(),
+        };
+        this.lastTiming = {
+          agentMs: Math.round(agentMs),
+          ttsMs: 0,
+          playbackMs: 0,
+          totalMs: Math.round(performance.now() - totalStartedAt),
+        };
+        this.lastCompletedAtMs = Date.now();
+        return;
+      }
       this.lastReply = {
         text: replyText,
         timestamp: new Date().toISOString(),
       };
+      const ttsStartedAt = performance.now();
       const wav = await this.voiceGateway.synthesizeSpeech(replyText);
+      const ttsMs = performance.now() - ttsStartedAt;
+      const playbackStartedAt = performance.now();
       await this.transport.playWav(wav);
+      const playbackMs = performance.now() - playbackStartedAt;
+      this.lastTiming = {
+        agentMs: Math.round(agentMs),
+        ttsMs: Math.round(ttsMs),
+        playbackMs: Math.round(playbackMs),
+        totalMs: Math.round(performance.now() - totalStartedAt),
+      };
       this.lastCompletedAtMs = Date.now();
     } catch (error) {
       this.lastError = {
@@ -119,8 +160,4 @@ export class SpokenReplyPipeline {
       timestamp: new Date().toISOString(),
     };
   }
-}
-
-function buildReplyText(inputText: string): string {
-  return `はい、聞こえています。${inputText}`;
 }

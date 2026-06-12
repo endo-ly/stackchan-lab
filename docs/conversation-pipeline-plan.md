@@ -1,5 +1,7 @@
 # 音声応答パイプライン実装 Plan
 
+> Status: 完了済みの固定応答導入 Plan。現在の実装では固定応答を廃止し、`AgentClient` 経由で agent runtime の応答を利用する。現行フローは [audio-pipeline.md](audio-pipeline.md)、EgoPulse との契約は `/root/workspace/egopulse/docs/voice-channel.md` を参照する。
+
 Wake Word、STT、TTS、StackChan 再生を一括で動かすための実装計画。
 
 まずは STT 結果に対して固定文字列を返し、その文字列を voice-gateway で TTS 生成して StackChan に再生させる。固定文字列を作る部分だけを、後で LLM や外部会話システムに置き換えられるようにしておく。
